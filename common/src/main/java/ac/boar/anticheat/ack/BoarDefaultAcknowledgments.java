@@ -19,6 +19,7 @@ import ac.boar.anticheat.ack.types.HotbarSlotAck;
 import ac.boar.anticheat.ack.types.InventoryContentAck;
 import ac.boar.anticheat.ack.types.InventorySlotAck;
 import ac.boar.anticheat.ack.types.MobEffectAck;
+import ac.boar.anticheat.ack.types.MovementCorrectionAck;
 import ac.boar.anticheat.ack.types.PlayerMetadataAck;
 import ac.boar.anticheat.ack.types.TeleportAcceptAck;
 import ac.boar.anticheat.ack.types.UpdateAbilitiesAck;
@@ -97,6 +98,7 @@ public final class BoarDefaultAcknowledgments {
         registry.register(VehicleSetAck.class, BoarDefaultAcknowledgments::handleVehicleSet);
 
         registry.register(TeleportAcceptAck.class, BoarDefaultAcknowledgments::handleTeleportAccept);
+        registry.register(MovementCorrectionAck.class, BoarDefaultAcknowledgments::handleMovementCorrection);
     }
 
     private static void handleChunkRadiusUpdate(BoarPlayer player, ChunkRadiusUpdateAck ack) {
@@ -374,5 +376,9 @@ public final class BoarDefaultAcknowledgments {
 
     private static void handleTeleportAccept(BoarPlayer player, TeleportAcceptAck ack) {
         ack.data().accept();
+    }
+
+    private static void handleMovementCorrection(BoarPlayer player, MovementCorrectionAck ack) {
+        player.getTeleportUtil().removePendingCorrection();
     }
 }

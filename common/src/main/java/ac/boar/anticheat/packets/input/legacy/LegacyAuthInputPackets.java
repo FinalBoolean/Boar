@@ -30,7 +30,7 @@ public class LegacyAuthInputPackets {
 
     public static void doPostPrediction(final BoarPlayer player, final PlayerAuthInputPacket packet) {
         player.postTick();
-        player.getTeleportUtil().cacheRewindHistory(player.tick, player.position.up(player.getYOffset()));
+        player.getTeleportUtil().updateLastKnownValid(player.position.up(player.getYOffset()));
 
         final UncertainRunner uncertainRunner = new UncertainRunner(player);
 
@@ -54,15 +54,25 @@ public class LegacyAuthInputPackets {
             player.lastTickFinalVelocity = player.unvalidatedTickEnd.clone();
             player.setPos(player.unvalidatedPosition.clone(), false);
         } else {
+            // Keep the predicted movement during a pending correction or its cooldown tick.
+            final boolean hasPendingCorrection = player.getTeleportUtil().hasPendingCorrection();
+            final boolean inCorrectionCooldown = player.getTeleportUtil().isCorrectionCooldown();
+            final boolean canAcceptClient = !hasPendingCorrection && !inCorrectionCooldown;
+
             // Have to do this due to loss precision, especially elytra!
-            if (player.velocity.distanceTo(player.unvalidatedTickEnd) - extraOffset < player.getMaxOffset()) {
+            if (canAcceptClient && player.velocity.distanceTo(player.unvalidatedTickEnd) - extraOffset < player.getMaxOffset()) {
                 player.velocity = player.unvalidatedTickEnd.clone();
             }
 
-            if (offset < player.getMaxOffset()) {
+            if (canAcceptClient && offset < player.getMaxOffset()) {
                 player.setPos(player.unvalidatedPosition.clone(), false);
             }
+
+            if (!hasPendingCorrection && inCorrectionCooldown) {
+                player.getTeleportUtil().setCorrectionCooldown(false);
+            }
         }
+
         correctInputData(player, packet);
     }
 

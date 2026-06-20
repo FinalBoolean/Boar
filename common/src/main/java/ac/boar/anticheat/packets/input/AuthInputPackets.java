@@ -9,7 +9,6 @@ import ac.boar.anticheat.packets.input.legacy.LegacyAuthInputPackets;
 import ac.boar.anticheat.packets.input.teleport.TeleportHandler;
 import ac.boar.anticheat.player.BoarPlayer;
 import ac.boar.anticheat.prediction.PredictionRunner;
-import ac.boar.anticheat.teleport.data.RewindData;
 import ac.boar.anticheat.teleport.data.TeleportData;
 import ac.boar.anticheat.util.Dimension;
 import ac.boar.anticheat.util.DimensionUtil;
@@ -17,7 +16,6 @@ import ac.boar.anticheat.util.math.Vec3;
 import ac.boar.protocol.api.CloudburstPacketEvent;
 import ac.boar.protocol.api.PacketListener;
 import org.cloudburstmc.protocol.bedrock.packet.ChangeDimensionPacket;
-import org.cloudburstmc.protocol.bedrock.packet.CorrectPlayerMovePredictionPacket;
 import org.cloudburstmc.protocol.bedrock.packet.MovePlayerPacket;
 import org.cloudburstmc.protocol.bedrock.packet.PlayerAuthInputPacket;
 
@@ -110,7 +108,7 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
         // the player can't just send a position 100000 blocks out to avoid for eg: velocity.
         // TODO: Test properly uhhhh in some cases, I'm too lazy to care.
         if (player.insideUnloadedChunk && !player.disableMitigations()) {
-            player.getTeleportUtil().teleport(player.getTeleportUtil().getLastKnowValid());
+            player.getTeleportUtil().teleport(player.getTeleportUtil().getLastKnownValid());
         }
 
         LegacyAuthInputPackets.doPostPrediction(player, packet);
@@ -143,10 +141,6 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
             }
 
             player.getTeleportUtil().queue(new TeleportData(new Vec3(packet.getPosition())));
-        }
-
-        if (event.getPacket() instanceof CorrectPlayerMovePredictionPacket packet) {
-            player.getTeleportUtil().queue(new RewindData(packet.getTick(), new Vec3(packet.getPosition()), new Vec3(packet.getDelta()), packet.isOnGround()));
         }
     }
 }

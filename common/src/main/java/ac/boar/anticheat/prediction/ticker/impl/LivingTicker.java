@@ -70,9 +70,10 @@ public class LivingTicker extends EntityTicker {
 
         this.applyInput();
 
-        // Prevent player from "elytra bouncing".
-        if (player.getFlagTracker().has(EntityFlag.GLIDING) && player.onGround && player.getInputData().contains(PlayerAuthInputData.START_JUMPING)) {
-            player.getTeleportUtil().rewind(player.tick - 1);
+        // Stop invalid grounded gliding before the jump and travel calculations use it.
+        final boolean stoppedGroundedGlide = player.getFlagTracker().has(EntityFlag.GLIDING) && player.onGround;
+        if (stoppedGroundedGlide) {
+            player.getFlagTracker().set(EntityFlag.GLIDING, false);
         }
 
         boolean inAscendable = player.getFlagTracker().has(EntityFlag.IN_ASCENDABLE_BLOCK) || player.getFlagTracker().has(EntityFlag.IN_SCAFFOLDING);
@@ -100,7 +101,7 @@ public class LivingTicker extends EntityTicker {
             }
         }
 
-        if (player.getFlagTracker().has(EntityFlag.GLIDING) && (player.onGround || player.vehicleData != null || player.hasEffect(Effect.LEVITATION))) {
+        if (player.getFlagTracker().has(EntityFlag.GLIDING) && (player.vehicleData != null || player.hasEffect(Effect.LEVITATION))) {
             player.getFlagTracker().set(EntityFlag.GLIDING, false);
         }
 
