@@ -125,22 +125,15 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
             player.queueAcknowledgment(new DimensionSwitchAck(dimension, packet.getLoadingScreenId()));
         }
 
-        if (event.getPacket() instanceof MovePlayerPacket packet) {
-            if (packet.getMode() == MovePlayerPacket.Mode.HEAD_ROTATION) {
-                return;
-            }
-
-            if (player.runtimeEntityId != packet.getRuntimeEntityId()) {
-                return;
-            }
-
-            // I think... there is some interpolation or some kind of smoothing when we use NORMAL?
-            // Well it's a pain in the ass the support it, so just send teleport....
-            if (packet.getMode() == MovePlayerPacket.Mode.NORMAL) {
+        if (event.getPacket() instanceof MovePlayerPacket packet
+                && packet.getRuntimeEntityId() == player.runtimeEntityId
+                && packet.getMode() != MovePlayerPacket.Mode.HEAD_ROTATION) {
+            // Convert unsupported smoothed and respawn movement modes to teleports.
+            if (packet.getMode() == MovePlayerPacket.Mode.NORMAL || packet.getMode() == MovePlayerPacket.Mode.RESPAWN) {
                 packet.setMode(MovePlayerPacket.Mode.TELEPORT);
             }
 
-            player.getTeleportUtil().queue(new TeleportData(new Vec3(packet.getPosition())));
+            player.getTeleportUtil().queue(new TeleportData(new Vec3(packet.getPosition()), packet.isOnGround()));
         }
     }
 }

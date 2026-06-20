@@ -1,6 +1,5 @@
 package ac.boar.anticheat.packets.input.teleport;
 
-import ac.boar.anticheat.Boar;
 import ac.boar.anticheat.data.input.PredictionData;
 import ac.boar.anticheat.player.BoarPlayer;
 import ac.boar.anticheat.prediction.engine.data.Vector;
@@ -33,36 +32,12 @@ public class TeleportHandler {
         }
     }
 
-//    private void processDimensionSwitch(final BoarPlayer player, final TeleportCache.DimensionSwitch dimension, final PlayerAuthInputPacket packet) {
-//        // Dimension switch should be followed with teleport so we don't have to do resync if the position mismatch.
-//        if (packet.getPosition().distance(dimension.getPosition().toVector3f()) <= 1.0E-3F) {
-//            player.setPos(new Vec3(packet.getPosition().sub(0, player.getYOffset(), 0)));
-//            player.unvalidatedPosition = player.prevUnvalidatedPosition = player.position.clone();
-//
-//            player.velocity = Vec3.ZERO.clone();
-//            player.predictionResult = new PredictionData(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO);
-//        }
-//    }
-
     private void processTeleport(final BoarPlayer player, final TeleportData data, final PlayerAuthInputPacket packet) {
-        float distance = packet.getPosition().distance(data.getPosition().toVector3f());
-
-        // Do this regardless if the player accept teleport or what not, we're going to force them to accept anyway.
         player.setPos(data.getPosition().down(player.getYOffset()));
         player.unvalidatedPosition = player.prevUnvalidatedPosition = player.position.clone();
         player.velocity = Vec3.ZERO.clone();
-        player.predictionResult = new PredictionData(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO); // Yep!
-        player.onGround = false;
-
-        // I think I'm being a bit lenient but on Bedrock the position error seems to be a bit high.
-        if (!packet.getInputData().contains(PlayerAuthInputData.HANDLE_TELEPORT) || distance > 1.0E-3F) {
-            // Player rejected teleport OR this is not the latest teleport.
-            if (!player.getTeleportUtil().isTeleporting()) {
-                player.getTeleportUtil().teleport(data.getPosition());
-
-                Boar.debug(player.getSession().name() + " rejected teleport with d=" + distance + ", resending teleport...", Boar.DebugMessage.INFO);
-            }
-        }
+        player.predictionResult = new PredictionData(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO);
+        player.onGround = data.isOnGround();
     }
 
     protected void processExempted(BoarPlayer player) {

@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 @Getter
 public class TeleportData {
     private final Vec3 position;
+    private final boolean onGround;
 
     private boolean accepted;
     public void accept() {

@@ -49,6 +49,7 @@ public class TeleportUtil {
 
     public void queue(TeleportData data) {
         this.queuedTeleports.add(data);
+        this.lastKnownValid = data.getPosition().clone();
         player.sendLatencyStack(new TeleportAcceptAck(data));
     }
 
