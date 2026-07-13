@@ -89,17 +89,34 @@ public class CompensatedWorld {
             return false;
         }
 
-        Vec3 radiusCenter = new Vec3(this.radiusCenter).add(0.5f, 0.5f, 0.5f); // Properly correct eh?
+        Vec3 radiusCenter = new Vec3(this.radiusCenter.getX() + 0.5f, 0, this.radiusCenter.getZ() + 0.5f);
 
         // Still unsure about this... should we get rid of chunk sections, or chunk?
         // Well since we're getting rid of chunks for now, let set the y pos to 0.
         Vec3 chunkCenter = new Vec3(chunkX + 8, 0, chunkZ + 8);
-        return radiusCenter.squaredDistanceTo(chunkCenter) > this.radius * this.radius;
+        return radiusCenter.squaredDistanceTo(chunkCenter) > this.radius * this.radius && new Vec3(player.position.x, 0, player.position.z).squaredDistanceTo(chunkCenter) > this.radius * this.radius;
     }
 
     public void put(int x, int z, BoarChunkSection[] chunks) {
         long chunkPosition = MathUtil.chunkPositionToLong(x, z);
         this.chunks.put(chunkPosition, new BoarChunk(chunks, new ArrayList<>()));
+    }
+
+    public void updateSection(int chunkX, int chunkZ, int sectionY, BoarChunkSection section) {
+        final int sectionCount = this.dimension.height() >> 4;
+        if (sectionY < 0 || sectionY >= sectionCount) {
+            return;
+        }
+
+        BoarChunk chunk = this.getChunk(chunkX, chunkZ);
+        if (chunk == null) {
+            final BoarChunkSection[] sections = new BoarChunkSection[sectionCount];
+            sections[sectionY] = section;
+            this.chunks.put(MathUtil.chunkPositionToLong(chunkX, chunkZ), new BoarChunk(sections, new ArrayList<>()));
+            return;
+        }
+
+        chunk.sections()[sectionY] = section;
     }
 
     public void removeFromCache(int x, int z) {

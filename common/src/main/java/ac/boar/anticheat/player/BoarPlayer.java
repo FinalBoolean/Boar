@@ -42,7 +42,7 @@ import lombok.SneakyThrows;
 import org.cloudburstmc.math.GenericMath;
 import org.cloudburstmc.math.TrigMath;
 import org.cloudburstmc.math.vector.Vector3i;
-import org.cloudburstmc.protocol.bedrock.BedrockServerSession;
+import ac.boar.protocol.BoarConnection;
 import org.cloudburstmc.protocol.bedrock.data.Ability;
 import org.cloudburstmc.protocol.bedrock.data.PlayerAuthInputData;
 import org.cloudburstmc.protocol.bedrock.data.entity.EntityFlag;
@@ -57,7 +57,7 @@ public final class BoarPlayer extends PlayerData {
     @Getter
     private final NetworkSession session;
     @Getter
-    private final BedrockServerSession bedrockSession;
+    private final BoarConnection connection;
     @Getter
     private final Entity entity;
     @Getter
@@ -102,13 +102,13 @@ public final class BoarPlayer extends PlayerData {
     public ScheduledFuture<?> future;
 
     @SneakyThrows
-    public BoarPlayer(NetworkSession session, BedrockServerSession bedrockSession, Entity entity,
+    public BoarPlayer(NetworkSession session, BoarConnection connection, Entity entity,
                       BlockMappingInfo mappingInfo, WorldAccessor worldAccessor, EntityAccessor entityAccessor,
                       InventoryAccessor inventoryAccessor, Map<String, AttributeInstance> defaultAttributes) {
         super(mappingInfo);
 
         this.session = session;
-        this.bedrockSession = bedrockSession;
+        this.connection = connection;
         this.entity = entity;
 
         this.worldAccessor = worldAccessor;
@@ -119,7 +119,7 @@ public final class BoarPlayer extends PlayerData {
     }
 
     void serverTick() {
-        if (this.getLatencyUtil().sentQueue().isEmpty()) {
+        if (!this.getLatencyUtil().hasInFlight()) {
             // If acks are pending, the next outbound batch flush emits an NSL covering them — skip the keepalive to avoid an extra wire ping.
             // The BedrockPeer ticks every 50ms so the flush will happen well before any timeout threshold.
             if (this.ackTransport instanceof BoarBatchedAcknowledgmentTransport batched && batched.hasPending()) {

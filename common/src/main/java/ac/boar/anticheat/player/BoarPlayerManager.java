@@ -9,9 +9,9 @@ import ac.boar.anticheat.player.data.BlockMappingInfo;
 import ac.boar.api.anticheat.model.NetworkSession;
 import ac.boar.mappings.entity.Entity;
 import ac.boar.protocol.BoarBatchAcknowledger;
+import ac.boar.protocol.BoarConnection;
 import ac.boar.protocol.BoarHandlerAdaptor;
 import io.netty.channel.Channel;
-import org.cloudburstmc.protocol.bedrock.BedrockServerSession;
 import org.cloudburstmc.protocol.bedrock.netty.codec.packet.BedrockPacketCodec;
 
 import java.util.HashMap;
@@ -22,11 +22,11 @@ public abstract class BoarPlayerManager<T> extends HashMap<T, BoarPlayer> {
 
     public BoarPlayer add(T session) {
         NetworkSession networkSession = this.createNetworkSession(session);
-        BedrockServerSession serverSession = this.getServerSession(session);
+        BoarConnection connection = this.getConnection(session);
 
         BoarPlayer player = new BoarPlayer(
                 networkSession,
-                serverSession,
+                connection,
                 this.getPlayerEntity(session),
                 this.getMappingInfo(session),
                 this.createWorldAccessor(session),
@@ -37,7 +37,23 @@ public abstract class BoarPlayerManager<T> extends HashMap<T, BoarPlayer> {
 
         player.setAckTransport(this.createAckTransport(player));
 
-        Channel channel = serverSession.getPeer().getChannel();
+        this.installHandlers(player, connection.getChannel());
+
+        this.put(session, player);
+        player.future = this.beginTicking(session, player::serverTick);
+        return player;
+    }
+
+    /**
+     * Installs the handlers that feed packets into Boar. The default inserts the bidirectional
+     * packet capture and the batch-tail acknowledgment injector directly into the bedrock channel
+     * pipeline, just after the {@link BedrockPacketCodec}.
+     *
+     * <p>A platform that already exposes its own packet-event stream can override this to bridge
+     * that stream into {@link ac.boar.protocol.PacketEvents} instead, so it doesn't run a second
+     * netty codec on the same channel.
+     */
+    protected void installHandlers(BoarPlayer player, Channel channel) {
         BoarHandlerAdaptor handlerAdaptor = new BoarHandlerAdaptor(player, (BedrockPacketCodec) channel.pipeline().get(BedrockPacketCodec.NAME));
         channel.pipeline().addAfter(BedrockPacketCodec.NAME, BoarHandlerAdaptor.NAME, handlerAdaptor);
         player.setHandlerAdaptor(handlerAdaptor);
@@ -45,15 +61,11 @@ public abstract class BoarPlayerManager<T> extends HashMap<T, BoarPlayer> {
         // traversal hits us after BoarHandlerAdaptor, so flush() can inject an NSL into the same
         // batch as whatever else is being flushed.
         channel.pipeline().addAfter(BedrockPacketCodec.NAME, BoarBatchAcknowledger.NAME, new BoarBatchAcknowledger(player));
-
-        this.put(session, player);
-        player.future = this.beginTicking(session, player::serverTick);
-        return player;
     }
 
     protected abstract NetworkSession createNetworkSession(T session);
 
-    protected abstract BedrockServerSession getServerSession(T session);
+    protected abstract BoarConnection getConnection(T session);
 
     protected abstract Entity getPlayerEntity(T session);
 
