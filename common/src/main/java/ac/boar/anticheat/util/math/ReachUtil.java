@@ -33,14 +33,16 @@ public class ReachUtil {
             final Vec3 reachStart = getEyePosition(player, attackPositions, f);
             final Vec3 reachEnd = reachStart.add(rotationVec.multiply(REACH_RAY_LENGTH));
 
-            final Vec3 primaryEntityPos = lerp(f, prevTickEntityPositions.a(), prevTickEntityPositions.b());
+            //final Vec3 primaryEntityPos = lerp(f, prevTickEntityPositions.a(), prevTickEntityPositions.b());
+            final Vec3 primaryEntityPos = prevTickEntityPositions.b();
             final Box primaryBox = entityState.calculateBoundingBox(primaryEntityPos);
             final Vec3 primaryHit = calculateHitResult(primaryBox, reachStart, reachEnd);
             if (primaryHit != null) {
                 distanceSq = Math.min(distanceSq, primaryHit.squaredDistanceTo(reachStart));
             }
 
-            final Box altBox = entityState.getBoundingBox(f);
+            //final Box altBox = entityState.getBoundingBox(f);
+            final Box altBox = entityState.getBoundingBox();
             final Vec3 altHit = calculateHitResult(altBox, reachStart, reachEnd);
             if (altHit != null) {
                 distanceSq = Math.min(distanceSq, altHit.squaredDistanceTo(reachStart));

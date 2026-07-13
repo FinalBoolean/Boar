@@ -16,11 +16,7 @@ public class PositionInterpolator implements Cloneable {
 
     public PositionInterpolator(CachedEntityState entity) {
         this.entity = entity;
-        if (entity.getEntity() == null) {
-            this.lerpDuration = 3;
-        } else {
-            this.lerpDuration = entity.getEntity().getType().is(EntityTypes.PLAYER) ? 3 : 6;
-        }
+        this.lerpDuration = 3;
     }
 
     public void refreshPositionAndAngles(Vec3 pow) {
