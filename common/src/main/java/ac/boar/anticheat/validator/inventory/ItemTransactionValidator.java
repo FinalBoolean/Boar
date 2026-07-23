@@ -1,5 +1,6 @@
 package ac.boar.anticheat.validator.inventory;
 
+import ac.boar.anticheat.Boar;
 import ac.boar.anticheat.compensated.CompensatedInventory;
 import ac.boar.anticheat.data.InteractionResult;
 import ac.boar.anticheat.data.ItemUseTracker;
@@ -398,30 +399,38 @@ public final class ItemTransactionValidator {
         return true;
     }
 
-    public void handle(final ItemStackRequestPacket packet) {
+    public boolean handle(final ItemStackRequestPacket packet) {
         final CompensatedInventory inventory = player.compensatedInventory;
         if (inventory.openContainer == null) {
-            return;
+            return true;
         }
 
         player.doingInventoryAction = true;
 
         final List<ItemStackRequest> clone = new ArrayList<>(packet.getRequests());
-        packet.getRequests().clear();
+        final boolean mitigate = !Boar.getConfig().disableMitigations();
+        if (mitigate) {
+            packet.getRequests().clear();
+        }
 
         final ItemRequestProcessor processor = new ItemRequestProcessor(player);
         for (final ItemStackRequest request : clone) {
             if (request.getActions().length == 0) {
-                packet.getRequests().add(request);
+                if (mitigate) {
+                    packet.getRequests().add(request);
+                }
                 continue;
             }
 
             if (!processor.processAll(request)) {
-                return;
+                return false;
             }
 
-            packet.getRequests().add(request);
+            if (mitigate) {
+                packet.getRequests().add(request);
+            }
         }
+        return true;
     }
 
     public static boolean validate(final ItemData predicted, final ItemData claimed) {

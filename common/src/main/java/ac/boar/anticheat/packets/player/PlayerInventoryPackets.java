@@ -9,6 +9,7 @@ import ac.boar.anticheat.ack.types.InventoryContentAck;
 import ac.boar.anticheat.ack.types.InventorySlotAck;
 import ac.boar.anticheat.ack.types.UpdateTradeAck;
 import ac.boar.anticheat.compensated.CompensatedInventory;
+import ac.boar.anticheat.check.impl.inventory.Inventory;
 import ac.boar.anticheat.player.BoarPlayer;
 import ac.boar.protocol.api.CloudburstPacketEvent;
 import ac.boar.protocol.api.PacketListener;
@@ -25,10 +26,14 @@ public class PlayerInventoryPackets implements PacketListener {
         if (event.getPacket() instanceof InventoryTransactionPacket packet) {
             try { // In case I messed up.
                 boolean cancelled = !player.transactionValidator.handle(packet);
+                if (cancelled && Boar.getConfig().disableMitigations()) {
+                    player.getCheckHolder().manuallyFail(Inventory.class,
+                            "invalid transaction, type=" + packet.getTransactionType() + ", action=" + packet.getActionType());
+                }
 //                if (cancelled) {
 //                    System.out.println("Cancel inventory action: " + packet);
 //                }
-                event.setCancelled(cancelled);
+                event.setCancelled(cancelled && !Boar.getConfig().disableMitigations());
             } catch (Exception exception) {
                 Boar.getInstance().getPlatform().logger().error(
                         "Failed to validate inventory transaction for player " + player.getSession().name()
@@ -41,7 +46,9 @@ public class PlayerInventoryPackets implements PacketListener {
         }
 
         if (event.getPacket() instanceof ItemStackRequestPacket packet) {
-            player.transactionValidator.handle(packet);
+            if (!player.transactionValidator.handle(packet) && Boar.getConfig().disableMitigations()) {
+                player.getCheckHolder().manuallyFail(Inventory.class, "invalid item stack request");
+            }
         }
 
         if (event.getPacket() instanceof InteractPacket packet) {

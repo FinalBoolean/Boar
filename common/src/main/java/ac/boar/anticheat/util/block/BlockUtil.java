@@ -1,5 +1,6 @@
 package ac.boar.anticheat.util.block;
 
+import ac.boar.anticheat.Boar;
 import ac.boar.anticheat.data.block.BoarBlockState;
 import ac.boar.anticheat.player.BoarPlayer;
 import ac.boar.mappings.block.Block;
@@ -11,6 +12,10 @@ import org.cloudburstmc.protocol.bedrock.packet.UpdateBlockPacket;
 public final class BlockUtil {
 
     public static void restoreCorrectBlock(BoarPlayer player, Vector3i vector, BoarBlockState blockState) {
+        if (Boar.getConfig().disableMitigations()) {
+            return;
+        }
+
         BlockDefinition bedrockBlock = blockState.definition(player);
 
         UpdateBlockPacket updateBlockPacket = new UpdateBlockPacket();

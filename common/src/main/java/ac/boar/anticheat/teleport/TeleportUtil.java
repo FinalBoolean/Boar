@@ -73,6 +73,10 @@ public class TeleportUtil {
     }
 
     public void rewind(final RewindHistory rewind) {
+        if (Boar.getConfig().disableMitigations()) {
+            return;
+        }
+
         if (this.isTeleporting()) {
             Boar.debug("[movement-debug] skipped rewind reason=already-teleporting queued=" + this.queuedTeleports.size() + " tick=" + rewind.tick(), Boar.DebugMessage.WARNING);
             return;

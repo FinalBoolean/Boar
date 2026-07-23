@@ -31,6 +31,9 @@ public final class Config {
     @JsonProperty("disabled-checks")
     @JsonSetter(nulls = Nulls.SKIP)
     private List<String> disabledChecks = new ArrayList<>();
+    @JsonProperty("disable-mitigations")
+    @JsonSetter(nulls = Nulls.SKIP)
+    private boolean disableMitigations;
     @JsonProperty("ignore-ghost-block")
     @JsonSetter(nulls = Nulls.SKIP)
     private boolean ignoreGhostBlock;
@@ -70,6 +73,10 @@ public final class Config {
 
     public List<String> disabledChecks() {
         return disabledChecks;
+    }
+
+    public boolean disableMitigations() {
+        return disableMitigations;
     }
 
     public boolean ignoreGhostBlock() {

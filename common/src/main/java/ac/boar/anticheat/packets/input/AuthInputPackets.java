@@ -3,6 +3,7 @@ package ac.boar.anticheat.packets.input;
 import ac.boar.anticheat.Boar;
 import ac.boar.anticheat.ack.types.DimensionSwitchAck;
 import ac.boar.anticheat.check.impl.reach.Reach;
+import ac.boar.anticheat.check.impl.badpackets.BadPacketA;
 import ac.boar.anticheat.check.impl.timer.Timer;
 import ac.boar.anticheat.packets.input.legacy.LegacyAuthInputPackets;
 import ac.boar.anticheat.packets.input.teleport.TeleportHandler;
@@ -40,7 +41,11 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
         final long claimedTick = packet.getTick();
 
         if (claimedTick < 0) { // Impossible, no way this can happen.
-            player.kick("Impossible tick id=" + claimedTick);
+            if (Boar.getConfig().disableMitigations()) {
+                player.getCheckHolder().manuallyFail(BadPacketA.class, "impossible tick=" + claimedTick);
+            } else {
+                player.kick("Impossible tick id=" + claimedTick);
+            }
             return;
         }
 
@@ -49,9 +54,11 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
 
         final Timer timer = (Timer) player.getCheckHolder().get(Timer.class);
         if (timer != null && timer.isInvalid()) {
-            event.setCancelled(true);
-            Boar.debug("[movement-debug] cancelled auth-input reason=timer tick=" + player.tick + " packetTick=" + packet.getTick() + " pos=" + packet.getPosition() + " delta=" + packet.getDelta(), Boar.DebugMessage.WARNING);
-            return;
+            if (!Boar.getConfig().disableMitigations()) {
+                event.setCancelled(true);
+                Boar.debug("[movement-debug] cancelled auth-input reason=timer tick=" + player.tick + " packetTick=" + packet.getTick() + " pos=" + packet.getPosition() + " delta=" + packet.getDelta(), Boar.DebugMessage.WARNING);
+                return;
+            }
         }
 
         // Timer check end here.
@@ -102,7 +109,7 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
         // There isn't much room to abuse considering they're not loaded in any way... and the position is validated so
         // the player can't just send a position 100000 blocks out to avoid for eg: velocity.
         // TODO: Test properly uhhhh in some cases, I'm too lazy to care.
-        if (player.insideUnloadedChunk) {
+        if (player.insideUnloadedChunk && !Boar.getConfig().disableMitigations()) {
             player.getTeleportUtil().teleport(player.getTeleportUtil().getLastKnowValid());
         }
 

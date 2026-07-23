@@ -1,5 +1,6 @@
 package ac.boar.anticheat.packets.input;
 
+import ac.boar.anticheat.Boar;
 import ac.boar.anticheat.data.input.TickData;
 import ac.boar.anticheat.packets.input.legacy.LegacyAuthInputPackets;
 import ac.boar.anticheat.player.BoarPlayer;
@@ -23,14 +24,16 @@ public class PostAuthInputPackets implements PacketListener {
 
             player.getTeleportUtil().getAuthInputHistory().put(packet.getTick(), new TickData(packet, player.getFlagTracker().cloneFlags(), player.cloneAttributes(), player.dimensions));
 
-            if (player.vehicleData != null && player.getEntity().vehicle() == null) {
+            if (player.vehicleData != null && player.getEntity().vehicle() == null && !Boar.getConfig().disableMitigations()) {
                 event.setCancelled(true);
             }
 
             // Although I'd like to avoid to do this at all times, it's justttt to be safe.
             // Shouldn't desync, since we already set it to be the unvalidated position if offset is close enough
             // Look at LegacyAuthInputPackets#doPostPrediction line 58
-            packet.setPosition(player.position.add(0, player.getYOffset(), 0).toVector3f());
+            if (!Boar.getConfig().disableMitigations()) {
+                packet.setPosition(player.position.add(0, player.getYOffset(), 0).toVector3f());
+            }
             LegacyAuthInputPackets.correctInputData(player, packet);
 
             // If the player is teleporting, NO PACKET SHOULD EVER PASS THROUGH. Except when they're rewinding.

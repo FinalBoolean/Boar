@@ -167,6 +167,10 @@ public final class BoarPlayer extends PlayerData {
     }
 
     public void kick(String reason) {
+        if (Boar.getConfig().disableMitigations()) {
+            return;
+        }
+
         this.session.disconnect(Boar.getInstance().getAlertManager().getPrefix() + " " + reason);
     }
 

@@ -1,12 +1,14 @@
 package ac.boar.anticheat.validator.blockbreak;
 
+import ac.boar.api.anticheat.annotations.CheckInfo;
+import ac.boar.anticheat.Boar;
+import ac.boar.anticheat.check.api.BaseCheck;
 import ac.boar.anticheat.data.BreakingData;
 import ac.boar.anticheat.data.block.BoarBlockState;
 import ac.boar.anticheat.player.BoarPlayer;
 import ac.boar.anticheat.util.MathUtil;
 import ac.boar.anticheat.util.block.BlockUtil;
 import ac.boar.anticheat.util.math.Direction;
-import lombok.RequiredArgsConstructor;
 import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.protocol.bedrock.data.PlayerActionType;
 import org.cloudburstmc.protocol.bedrock.data.PlayerAuthInputData;
@@ -22,8 +24,8 @@ import static org.cloudburstmc.protocol.bedrock.data.PlayerActionType.BLOCK_CONT
 import static org.cloudburstmc.protocol.bedrock.data.PlayerActionType.BLOCK_PREDICT_DESTROY;
 import static org.cloudburstmc.protocol.bedrock.data.PlayerActionType.START_BREAK;
 
-@RequiredArgsConstructor
-public class ServerBreakBlockValidator {
+@CheckInfo(name = "Block Break")
+public class ServerBreakBlockValidator extends BaseCheck {
     private final static List<PlayerActionType> ALLOWED_ACTIONS = List.of(
             START_BREAK,
             ABORT_BREAK,
@@ -31,9 +33,11 @@ public class ServerBreakBlockValidator {
             BLOCK_CONTINUE_DESTROY
     );
 
-    private final BoarPlayer player;
-
     private BreakingData breakingData;
+
+    public ServerBreakBlockValidator(BoarPlayer player) {
+        super(player);
+    }
 
     public void handle(final PlayerAuthInputPacket packet) {
         if (!packet.getInputData().contains(PlayerAuthInputData.PERFORM_BLOCK_ACTIONS)) {
@@ -48,16 +52,19 @@ public class ServerBreakBlockValidator {
 
             // These action are shouldn't be process, and likely won't be process by Geyser anyway.
             if (!ALLOWED_ACTIONS.contains(actionType) || action.getBlockPosition() == null || !MathUtil.isValid(action.getBlockPosition())) {
+                failWithoutMitigation("invalid action=" + actionType + ", position=" + action.getBlockPosition());
                 continue;
             }
 
             if (actionType != ABORT_BREAK && (face < 0 || face >= Direction.VALUES.length)) {
+                failWithoutMitigation("invalid face=" + face + ", action=" + actionType);
                 continue;
             }
 
             final Vector3i blockPosition = action.getBlockPosition();
 
             if (blockPosition.distance(player.position.toVector3i()) > 12) {
+                failWithoutMitigation("block out of range, position=" + blockPosition);
                 BlockUtil.restoreCorrectBlock(player, blockPosition);
                 continue;
             }
@@ -69,6 +76,7 @@ public class ServerBreakBlockValidator {
 
             final BoarBlockState state = player.compensatedWorld.getBlockState(blockPosition, 0);
             if (!BlockUtil.determineCanBreak(player, state)) {
+                failWithoutMitigation("cannot break block at " + blockPosition);
                 continue;
             }
 
@@ -95,6 +103,7 @@ public class ServerBreakBlockValidator {
                 case ABORT_BREAK -> this.breakingData = null;
                 case BLOCK_PREDICT_DESTROY -> {
                     if (this.breakingData == null || !Objects.equals(blockPosition, this.breakingData.getPosition())) {
+                        failWithoutMitigation("unexpected predicted destroy at " + blockPosition);
                         continue;
                     }
 
@@ -112,11 +121,21 @@ public class ServerBreakBlockValidator {
             validActions.add(action);
         }
 
+        if (Boar.getConfig().disableMitigations()) {
+            return;
+        }
+
         packet.getPlayerActions().clear();
         packet.getPlayerActions().addAll(validActions);
 
         if (packet.getPlayerActions().isEmpty()) {
             packet.getInputData().remove(PlayerAuthInputData.PERFORM_BLOCK_ACTIONS);
+        }
+    }
+
+    private void failWithoutMitigation(String verbose) {
+        if (Boar.getConfig().disableMitigations()) {
+            fail(verbose);
         }
     }
 }

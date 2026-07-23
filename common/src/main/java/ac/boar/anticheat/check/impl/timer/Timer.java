@@ -16,6 +16,7 @@ public final class Timer extends BaseCheck implements PingBasedCheck {
     private long lastNS, balance, prevTick;
     private long loseBalance;
     private boolean beforeAuthInput;
+    private boolean balanceAdvantageFlagged;
 
     public Timer(final BoarPlayer player) {
         super(player);
@@ -60,14 +61,25 @@ public final class Timer extends BaseCheck implements PingBasedCheck {
             }
 
             Boar.debug("[timer-debug] invalid tick=" + player.tick + " prevTick=" + this.prevTick + " balance=" + this.balance + " loseBalance=" + this.loseBalance + " distanceNs=" + distance + " neededNs=" + neededDistance + " teleporting=" + player.getTeleportUtil().isTeleporting(), Boar.DebugMessage.WARNING);
-            player.getTeleportUtil().teleport(player.getTeleportUtil().getLastKnowValid());
+            if (!Boar.getConfig().disableMitigations()) {
+                player.getTeleportUtil().teleport(player.getTeleportUtil().getLastKnowValid());
+            }
             this.balance -= AVERAGE_DISTANCE;
             valid = false;
         } else {
             long maxBalanceAdvantage = (long) Math.max(0, Boar.getConfig().maxBalanceAdvantage() * 1e+6);
             if (this.balance <= -Math.abs(maxBalanceAdvantage + AVERAGE_DISTANCE) && Boar.getConfig().maxBalanceAdvantage() > 0) {
-                this.loseBalance = Math.abs(this.balance);
-                this.balance = -AVERAGE_DISTANCE;
+                if (Boar.getConfig().disableMitigations()) {
+                    if (!this.balanceAdvantageFlagged) {
+                        this.fail("balance=" + this.balance + ", player exceeded the lag advantage limit");
+                        this.balanceAdvantageFlagged = true;
+                    }
+                } else {
+                    this.loseBalance = Math.abs(this.balance);
+                    this.balance = -AVERAGE_DISTANCE;
+                }
+            } else {
+                this.balanceAdvantageFlagged = false;
             }
         }
 

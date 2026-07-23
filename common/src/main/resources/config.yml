@@ -27,6 +27,10 @@ differ-till-alert: 0.0
 # Check name should be in format "Name-Type" and if there is no type then "Name", ex: Reach-A (don't actually disable reach check lol).
 disabled-checks: []
 
+# Disable every anti-cheat mitigation while continuing to run checks and report violations.
+# This allows detected actions to reach the server without Boar cancelling packets, correcting blocks, rewinding movement, or kicking players.
+disable-mitigations: false
+
 # Normally Boar will account for lag, that also including block, if on the server side the block below player is Air but if
 # on the client side, it's an actual block, then Boar will account for this. However, with this enable, Boar will forcefully
 # rewind player if player is standing on a ghost block, this for ex: prevent player from abusing high ping to climb up walls in

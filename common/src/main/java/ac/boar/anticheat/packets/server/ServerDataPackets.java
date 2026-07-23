@@ -47,7 +47,7 @@ public class ServerDataPackets implements PacketListener {
             // We need this to do rewind teleport.
             start.setAuthoritativeMovementMode(AuthoritativeMovementMode.SERVER_WITH_REWIND);
             start.setRewindHistorySize(Boar.getConfig().rewindHistory());
-            player.serverBreakBlockValidator = new ServerBreakBlockValidator(player);
+            player.serverBreakBlockValidator = (ServerBreakBlockValidator) player.getCheckHolder().get(ServerBreakBlockValidator.class);
 
             player.sendLatencyStack(new GameTypeAck(start.getPlayerGameType()));
         }
