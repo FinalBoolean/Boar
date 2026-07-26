@@ -22,6 +22,9 @@ public final class Config {
     @JsonProperty("player-position-acceptance-threshold")
     @JsonSetter(nulls = Nulls.SKIP)
     private float acceptanceThreshold = 1.0E-4F;
+    @JsonProperty("force-server-authoritative-vehicles")
+    @JsonSetter(nulls = Nulls.SKIP)
+    private boolean forceServerAuthoritativeVehicles = true;
     @JsonProperty("max-tolerance-compensated-reach")
     @JsonSetter(nulls = Nulls.SKIP)
     private float toleranceReach = 3.005F;
@@ -58,6 +61,10 @@ public final class Config {
 
     public float acceptanceThreshold() {
         return acceptanceThreshold;
+    }
+
+    public boolean forceServerAuthoritativeVehicles() {
+        return forceServerAuthoritativeVehicles;
     }
 
     public float toleranceReach() {

@@ -15,6 +15,7 @@ import ac.boar.anticheat.util.DimensionUtil;
 import ac.boar.anticheat.util.math.Vec3;
 import ac.boar.protocol.api.CloudburstPacketEvent;
 import ac.boar.protocol.api.PacketListener;
+import org.cloudburstmc.protocol.bedrock.data.PredictionType;
 import org.cloudburstmc.protocol.bedrock.packet.ChangeDimensionPacket;
 import org.cloudburstmc.protocol.bedrock.packet.CorrectPlayerMovePredictionPacket;
 import org.cloudburstmc.protocol.bedrock.packet.MovePlayerPacket;
@@ -138,7 +139,8 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
             player.getTeleportUtil().queue(new TeleportData(new Vec3(packet.getPosition())));
         }
 
-        if (event.getPacket() instanceof CorrectPlayerMovePredictionPacket packet) {
+        if (event.getPacket() instanceof CorrectPlayerMovePredictionPacket packet
+                && packet.getPredictionType() != PredictionType.VEHICLE) {
             player.getTeleportUtil().queue(new RewindData(packet.getTick(), new Vec3(packet.getPosition()), new Vec3(packet.getDelta()), packet.isOnGround()));
         }
     }

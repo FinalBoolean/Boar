@@ -2,6 +2,7 @@ package ac.boar.geyser.mappings.entity;
 
 import ac.boar.mappings.entity.Entity;
 import ac.boar.mappings.entity.EntityDefinition;
+import org.cloudburstmc.math.vector.Vector3f;
 import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.protocol.bedrock.data.entity.EntityDataType;
 import org.cloudburstmc.protocol.bedrock.packet.UpdateAttributesPacket;
@@ -9,6 +10,11 @@ import org.geysermc.geyser.entity.type.player.PlayerEntity;
 import org.geysermc.geyser.entity.type.player.SessionPlayerEntity;
 
 public record GeyserEntity(org.geysermc.geyser.entity.type.Entity handle) implements Entity {
+
+    @Override
+    public long runtimeId() {
+        return this.handle.geyserId();
+    }
 
     @Override
     public EntityDefinition definition() {
@@ -23,6 +29,26 @@ public record GeyserEntity(org.geysermc.geyser.entity.type.Entity handle) implem
         }
 
         return new GeyserEntity(vehicle);
+    }
+
+    @Override
+    public Vector3f bedrockPosition() {
+        return this.handle.bedrockPosition();
+    }
+
+    @Override
+    public Vector3f motion() {
+        return this.handle.getMotion();
+    }
+
+    @Override
+    public Vector3f bedrockRotation() {
+        return this.handle.bedrockRotation();
+    }
+
+    @Override
+    public boolean onGround() {
+        return this.handle.isOnGround();
     }
 
     @Override
