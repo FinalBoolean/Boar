@@ -139,7 +139,7 @@ public final class BoarPlayer extends PlayerData {
         }
 
         if (System.currentTimeMillis() - this.getLatencyUtil().prevAcceptedTime > Boar.getConfig().maxLatencyWait()) {
-            kick("Timed out!");
+            disconnect("Timed out!");
         }
     }
 
@@ -201,6 +201,10 @@ public final class BoarPlayer extends PlayerData {
             return;
         }
 
+        disconnect(reason);
+    }
+
+    private void disconnect(String reason) {
         this.session.disconnect(Boar.getInstance().getAlertManager().getPrefix() + " " + reason);
     }
 
