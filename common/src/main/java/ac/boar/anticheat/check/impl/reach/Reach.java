@@ -60,16 +60,13 @@ public final class Reach extends BaseCheck implements PacketCheck {
             return;
         }
 
-        if (player.inputMode == InputMode.TOUCH) {
-            if (MathUtil.wrapDegrees(Math.abs(player.yaw - player.interactRotation.getY())) > 90) {
-                if (player.disableMitigations()) {
-                    this.fail("invalid touch rotation, yaw=" + player.yaw + ", interactYaw=" + player.interactRotation.getY());
-                } else {
-                    event.setCancelled(true);
-                }
-                Boar.debug("[reach-debug] cancelled reason=touch-fov runtimeId=" + packet.getRuntimeEntityId() + " yaw=" + player.yaw + " interactYaw=" + player.interactRotation.getY(), Boar.DebugMessage.WARNING);
-                return;
+        final boolean invalidTouchRotation = player.inputMode == InputMode.TOUCH
+                && MathUtil.wrapDegrees(Math.abs(player.yaw - player.interactRotation.getY())) > 90;
+        if (invalidTouchRotation) {
+            if (player.disableMitigations()) {
+                this.fail("invalid touch rotation, yaw=" + player.yaw + ", interactYaw=" + player.interactRotation.getY());
             }
+            Boar.debug("[reach-debug] deferred reason=touch-fov runtimeId=" + packet.getRuntimeEntityId() + " yaw=" + player.yaw + " interactYaw=" + player.interactRotation.getY(), Boar.DebugMessage.WARNING);
         }
 
         event.setCancelled(true);
@@ -78,7 +75,8 @@ public final class Reach extends BaseCheck implements PacketCheck {
                 packet,
                 entity,
                 new Pair<>(player.prevPosition, player.position),
-                new Pair<>(entity.getCurrent().getPrevPos(), entity.getCurrent().getPos())
+                new Pair<>(entity.getCurrent().getPrevPos(), entity.getCurrent().getPos()),
+                invalidTouchRotation
         ));
     }
 
@@ -88,6 +86,11 @@ public final class Reach extends BaseCheck implements PacketCheck {
         }
 
         for (PendingAttack attack : this.pending) {
+            if (attack.invalidTouchRotation) {
+                this.resolveInvalid(attack);
+                continue;
+            }
+
             final float reach = ReachUtil.calculateReach(player, attack.attackerPositions, attack.entity, attack.entityPositionsAtAttack);
             if (reach > Boar.getConfig().toleranceReach()) {
                 if (reach == Float.MAX_VALUE) {
@@ -97,11 +100,7 @@ public final class Reach extends BaseCheck implements PacketCheck {
                     Boar.debug("[reach-debug] fail reason=distance distance=" + reach + " tolerance=" + Boar.getConfig().toleranceReach(), Boar.DebugMessage.WARNING);
                     this.fail("entity out of range, distance=" + reach);
                 }
-                if (player.disableMitigations()) {
-                    player.injectClientPacket(attack.packet);
-                } else {
-                    ReferenceCountUtil.safeRelease(attack.packet);
-                }
+                this.resolveInvalid(attack);
             } else {
                 player.injectClientPacket(attack.packet);
                 this.buffer = Math.max(this.buffer - 0.002f, 0f);
@@ -109,6 +108,14 @@ public final class Reach extends BaseCheck implements PacketCheck {
         }
 
         this.pending.clear();
+    }
+
+    private void resolveInvalid(PendingAttack attack) {
+        if (player.disableMitigations()) {
+            player.injectClientPacket(attack.packet);
+        } else {
+            ReferenceCountUtil.safeRelease(attack.packet);
+        }
     }
 
     @Override
@@ -123,6 +130,7 @@ public final class Reach extends BaseCheck implements PacketCheck {
             InventoryTransactionPacket packet,
             EntityCache entity,
             Pair<Vec3, Vec3> attackerPositions,
-            Pair<Vec3, Vec3> entityPositionsAtAttack
+            Pair<Vec3, Vec3> entityPositionsAtAttack,
+            boolean invalidTouchRotation
     ) {}
 }
