@@ -24,6 +24,7 @@ import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.protocol.bedrock.data.Ability;
 import org.cloudburstmc.protocol.bedrock.data.GameType;
 import org.cloudburstmc.protocol.bedrock.data.InputMode;
+import org.cloudburstmc.protocol.bedrock.data.InputInteractionModel;
 import org.cloudburstmc.protocol.bedrock.data.PlayerAuthInputData;
 import org.cloudburstmc.protocol.bedrock.data.attribute.AttributeModifierData;
 import org.cloudburstmc.protocol.bedrock.data.attribute.AttributeOperation;
@@ -65,11 +66,14 @@ public class PlayerData {
 
     public GameType gameType = GameType.DEFAULT;
     public InputMode inputMode = InputMode.UNDEFINED;
+    public InputInteractionModel interactionModel = InputInteractionModel.TOUCH;
 
     // Position, rotation, other.
     public float yaw, pitch, prevYaw, prevPitch;
     public Vec3 unvalidatedPosition = Vec3.ZERO, prevUnvalidatedPosition = Vec3.ZERO;
-    public Vector2f interactRotation = Vector2f.ZERO;
+
+    public Vector2f interactRotation = Vector2f.ZERO, prevInteractRotation = Vector2f.ZERO;
+    public boolean prevInteractRotUnchanged = false;
 
     public Vec3 position = Vec3.ZERO, prevPosition = Vec3.ZERO;
     public Vector3f rotation = Vector3f.ZERO;
@@ -217,7 +221,7 @@ public class PlayerData {
 
     public final void setPos(Vec3 vec3, boolean prev) {
         if (prev) {
-            this.prevPosition = this.position;
+            this.prevPosition = this.position.clone();
         }
 
         this.position = vec3;

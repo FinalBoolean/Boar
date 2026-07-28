@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 @Setter
@@ -51,6 +52,11 @@ public class CompensatedWorld {
 
     public EntityCache getEntity(long id) {
         return this.entities.get(id);
+    }
+
+    public Optional<EntityCache> fetchEntity(long id) {
+        EntityCache entity = this.entities.get(id);
+        return entity == null ? Optional.empty() : Optional.of(entity);
     }
 
     public EntityCache addToCache(final BoarPlayer player, final long runtimeId, final long uniqueId) {

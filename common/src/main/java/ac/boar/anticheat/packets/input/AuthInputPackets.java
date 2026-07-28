@@ -73,7 +73,7 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
 
         final Reach reach = (Reach) player.getCheckHolder().get(Reach.class);
         if (reach != null) { // null when the Reach check is disabled via disabled-checks - don't NPE.
-            reach.pollQueuedHits();
+            reach.validatePending();
         }
 
         player.tick();
