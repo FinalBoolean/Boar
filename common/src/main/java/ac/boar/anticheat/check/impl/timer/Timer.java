@@ -16,7 +16,6 @@ public final class Timer extends BaseCheck implements PingBasedCheck {
     private long lastNS, balance, prevTick;
     private long loseBalance;
     private boolean beforeAuthInput;
-    private boolean balanceAdvantageFlagged;
 
     public Timer(final BoarPlayer player) {
         super(player);
@@ -69,17 +68,8 @@ public final class Timer extends BaseCheck implements PingBasedCheck {
         } else {
             long maxBalanceAdvantage = (long) Math.max(0, Boar.getConfig().maxBalanceAdvantage() * 1e+6);
             if (this.balance <= -Math.abs(maxBalanceAdvantage + AVERAGE_DISTANCE) && Boar.getConfig().maxBalanceAdvantage() > 0) {
-                if (player.disableMitigations()) {
-                    if (!this.balanceAdvantageFlagged) {
-                        this.fail("balance=" + this.balance + ", player exceeded the lag advantage limit");
-                        this.balanceAdvantageFlagged = true;
-                    }
-                } else {
-                    this.loseBalance = Math.abs(this.balance);
-                    this.balance = -AVERAGE_DISTANCE;
-                }
-            } else {
-                this.balanceAdvantageFlagged = false;
+                this.loseBalance = Math.abs(this.balance);
+                this.balance = -AVERAGE_DISTANCE;
             }
         }
 
