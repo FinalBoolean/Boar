@@ -73,7 +73,7 @@ public class TeleportUtil {
     }
 
     public void rewind(final RewindHistory rewind) {
-        if (Boar.getConfig().disableMitigations()) {
+        if (player.disableMitigations()) {
             return;
         }
 

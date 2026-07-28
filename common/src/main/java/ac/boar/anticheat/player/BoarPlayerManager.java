@@ -1,5 +1,6 @@
 package ac.boar.anticheat.player;
 
+import ac.boar.anticheat.Boar;
 import ac.boar.anticheat.ack.BoarAcknowledgmentTransport;
 import ac.boar.anticheat.data.vanilla.AttributeInstance;
 import ac.boar.anticheat.player.accessor.EntityAccessor;
@@ -32,7 +33,8 @@ public abstract class BoarPlayerManager<T> extends HashMap<T, BoarPlayer> {
                 this.createWorldAccessor(session),
                 this.createEntityAccessor(session),
                 this.createInventoryAccessor(session),
-                this.createDefaultAttributes()
+                this.createDefaultAttributes(),
+                this.shouldDisableMitigations(session)
         );
 
         player.setAckTransport(this.createAckTransport(player));
@@ -59,6 +61,20 @@ public abstract class BoarPlayerManager<T> extends HashMap<T, BoarPlayer> {
         // traversal hits us after BoarHandlerAdaptor, so flush() can inject an NSL into the same
         // batch as whatever else is being flushed.
         channel.pipeline().addAfter(BedrockPacketCodec.NAME, BoarBatchAcknowledger.NAME, new BoarBatchAcknowledger(player));
+    }
+
+    /**
+     * Decides whether the player being added starts with mitigations suppressed — checks still run and
+     * violations are still reported, but Boar won't cancel packets, correct blocks, rewind movement or
+     * kick. The default reads the global {@code disable-mitigations} config value, so every player gets
+     * the same arm.
+     *
+     * <p>A platform that wants to split players (A/B testing corrections, per-rank exemptions, a staged
+     * rollout) can override this to decide per session. The value is only a starting point —
+     * {@link BoarPlayer#setDisableMitigations(boolean)} can move a player between arms afterwards.
+     */
+    protected boolean shouldDisableMitigations(T session) {
+        return Boar.getConfig().disableMitigations();
     }
 
     protected abstract NetworkSession createNetworkSession(T session);

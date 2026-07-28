@@ -29,6 +29,9 @@ disabled-checks: []
 
 # Disable every anti-cheat mitigation while continuing to run checks and report violations.
 # This allows detected actions to reach the server without Boar cancelling packets, correcting blocks, rewinding movement, or kicking players.
+# This is the default each player starts with; mitigations are tracked per-player, so an integration can override
+# BoarPlayerManager#shouldDisableMitigations to split players into arms (ex: A/B testing corrections) or flip a single
+# player at runtime with BoarPlayer#setDisableMitigations.
 disable-mitigations: false
 
 # Normally Boar will account for lag, that also including block, if on the server side the block below player is Air but if

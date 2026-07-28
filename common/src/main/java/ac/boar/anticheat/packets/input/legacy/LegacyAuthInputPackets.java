@@ -1,6 +1,5 @@
 package ac.boar.anticheat.packets.input.legacy;
 
-import ac.boar.anticheat.Boar;
 import ac.boar.anticheat.check.api.Check;
 import ac.boar.anticheat.check.api.impl.OffsetHandlerCheck;
 import ac.boar.anticheat.collision.Collider;
@@ -50,7 +49,7 @@ public class LegacyAuthInputPackets {
             }
         }
 
-        if (Boar.getConfig().disableMitigations()) {
+        if (player.disableMitigations()) {
             player.velocity = player.unvalidatedTickEnd.clone();
             player.lastTickFinalVelocity = player.unvalidatedTickEnd.clone();
             player.setPos(player.unvalidatedPosition.clone(), false);
@@ -70,7 +69,7 @@ public class LegacyAuthInputPackets {
     }
 
     public static void correctInputData(final BoarPlayer player, final PlayerAuthInputPacket packet) {
-        if (player.isMovementExempted() || Boar.getConfig().disableMitigations()) {
+        if (player.isMovementExempted() || player.disableMitigations()) {
             return;
         }
 
@@ -114,7 +113,7 @@ public class LegacyAuthInputPackets {
                 player.getFlagTracker().set(EntityFlag.SPRINTING, false);
 
                 // Tell geyser that the player "want" to stop sprinting.
-                if (!Boar.getConfig().disableMitigations()) {
+                if (!player.disableMitigations()) {
                     packet.getInputData().add(PlayerAuthInputData.STOP_SPRINTING);
                 }
             }
@@ -156,7 +155,7 @@ public class LegacyAuthInputPackets {
 
                     // Prevent player from spoofing elytra gliding, could false, considering that the compensated inventory is a bit half-baked but should works in most case.
                     player.getFlagTracker().set(EntityFlag.GLIDING, BoarItemStack.of(player.getSession(), cache.get(1).getData()).is(Items.ELYTRA));
-                    if (!player.getFlagTracker().has(EntityFlag.GLIDING) && !Boar.getConfig().disableMitigations()) {
+                    if (!player.getFlagTracker().has(EntityFlag.GLIDING) && !player.disableMitigations()) {
                         iterator.remove();
                     }
                 }
@@ -168,7 +167,7 @@ public class LegacyAuthInputPackets {
 
                     // Don't let player send an START_SPRINTING to force server to send back a sprinting attribute or allow the
                     // client to trick the server into letting it get sprinting speed while not moving forward.
-                    if (!forwardMovement && !Boar.getConfig().disableMitigations()) {
+                    if (!forwardMovement && !player.disableMitigations()) {
                         iterator.remove();
                     }
                 }
@@ -181,14 +180,14 @@ public class LegacyAuthInputPackets {
                 case START_SNEAKING ->  {
                     if (!useRawSneakState) {
                         player.getFlagTracker().set(EntityFlag.SNEAKING, true);
-                    } else if (!player.getInputData().contains(PlayerAuthInputData.SNEAK_CURRENT_RAW) && !Boar.getConfig().disableMitigations()) {
+                    } else if (!player.getInputData().contains(PlayerAuthInputData.SNEAK_CURRENT_RAW) && !player.disableMitigations()) {
                         iterator.remove();
                     }
                 }
                 case STOP_SNEAKING -> {
                     if (!useRawSneakState) {
                         player.getFlagTracker().set(EntityFlag.SNEAKING, false);
-                    } else if (player.getInputData().contains(PlayerAuthInputData.SNEAK_CURRENT_RAW) && !Boar.getConfig().disableMitigations()) {
+                    } else if (player.getInputData().contains(PlayerAuthInputData.SNEAK_CURRENT_RAW) && !player.disableMitigations()) {
                         iterator.remove();
                     }
                 }
@@ -200,7 +199,7 @@ public class LegacyAuthInputPackets {
                     if (player.dirtySpinStop) {
                         player.stopRiptide();
                         player.velocity = player.velocity.multiply(-0.2F);
-                    } else if (!Boar.getConfig().disableMitigations()) {
+                    } else if (!player.disableMitigations()) {
                         iterator.remove();
                     }
                 }
@@ -209,7 +208,7 @@ public class LegacyAuthInputPackets {
                     // Seems to be the case, this should only be taken seriously when it's trigger by sever metadata
                     // or actual item use from inventory transaction packet.
                     if (player.getItemUseTracker().getDirtyUsing() == ItemUseTracker.DirtyUsing.NONE) {
-                        if (!Boar.getConfig().disableMitigations()) {
+                        if (!player.disableMitigations()) {
                             iterator.remove();
                         }
                         return;
@@ -221,7 +220,7 @@ public class LegacyAuthInputPackets {
                     // The player in fact CAN use an item that is not air even if that item is eg: dirt for 1 tick.
                     // However, this likely will only happen when flag de-sync.
                     if (itemStack.isEmpty()) {
-                        if (!Boar.getConfig().disableMitigations()) {
+                        if (!player.disableMitigations()) {
                             iterator.remove();
                         }
                         return;

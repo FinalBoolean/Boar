@@ -94,17 +94,26 @@ public final class BoarPlayer extends PlayerData {
     @Getter
     private final Map<UUID, MessageRecipient> trackedDebugPlayers = new ConcurrentHashMap<>();
 
+    // Whether mitigations are suppressed for this player: checks still run and violations are still
+    // reported, but nothing is cancelled, corrected, rewound or kicked. Seeded per-player at
+    // construction (see BoarPlayerManager#shouldDisableMitigations) and mutable afterwards, so an
+    // integration can move a single player between arms at runtime without touching the config.
+    @Setter
+    private boolean disableMitigations;
+
     public ScheduledFuture<?> future;
 
     @SneakyThrows
     public BoarPlayer(NetworkSession session, BoarConnection connection, Entity entity,
                       BlockMappingInfo mappingInfo, WorldAccessor worldAccessor, EntityAccessor entityAccessor,
-                      InventoryAccessor inventoryAccessor, Map<String, AttributeInstance> defaultAttributes) {
+                      InventoryAccessor inventoryAccessor, Map<String, AttributeInstance> defaultAttributes,
+                      boolean disableMitigations) {
         super(mappingInfo);
 
         this.session = session;
         this.connection = connection;
         this.entity = entity;
+        this.disableMitigations = disableMitigations;
 
         this.worldAccessor = worldAccessor;
         this.entityAccessor = entityAccessor;
@@ -166,8 +175,12 @@ public final class BoarPlayer extends PlayerData {
         return this.abilities.contains(Ability.MAY_FLY) || this.getFlagTracker().isFlying() || this.getFlagTracker().isWasFlying();
     }
 
+    public boolean disableMitigations() {
+        return this.disableMitigations;
+    }
+
     public void kick(String reason) {
-        if (Boar.getConfig().disableMitigations()) {
+        if (this.disableMitigations) {
             return;
         }
 

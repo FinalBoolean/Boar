@@ -1,6 +1,5 @@
 package ac.boar.anticheat.validator.inventory;
 
-import ac.boar.anticheat.Boar;
 import ac.boar.anticheat.compensated.CompensatedInventory;
 import ac.boar.anticheat.data.InteractionResult;
 import ac.boar.anticheat.data.ItemUseTracker;
@@ -408,7 +407,7 @@ public final class ItemTransactionValidator {
         player.doingInventoryAction = true;
 
         final List<ItemStackRequest> clone = new ArrayList<>(packet.getRequests());
-        final boolean mitigate = !Boar.getConfig().disableMitigations();
+        final boolean mitigate = !player.disableMitigations();
         if (mitigate) {
             packet.getRequests().clear();
         }

@@ -1,6 +1,5 @@
 package ac.boar.anticheat.check.impl.badpackets;
 
-import ac.boar.anticheat.Boar;
 import ac.boar.api.anticheat.annotations.CheckInfo;
 import ac.boar.anticheat.check.api.BaseCheck;
 import ac.boar.anticheat.check.api.impl.PacketCheck;
@@ -20,7 +19,7 @@ public class BadPacketA extends BaseCheck implements PacketCheck {
         if (event.getPacket() instanceof PlayerAuthInputPacket packet) {
             if (!MathUtil.isValid(packet.getPosition()) || !MathUtil.isValid(packet.getRotation()) || !MathUtil.isValid(packet.getDelta())) {
                 fail("pos=" + packet.getPosition() + ", rot=" + packet.getRotation() + ", delta=" + packet.getDelta());
-                if (!Boar.getConfig().disableMitigations()) {
+                if (!player.disableMitigations()) {
                     player.kick("Invalid auth input packet!");
                 }
             }

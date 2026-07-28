@@ -26,14 +26,14 @@ public class PlayerInventoryPackets implements PacketListener {
         if (event.getPacket() instanceof InventoryTransactionPacket packet) {
             try { // In case I messed up.
                 boolean cancelled = !player.transactionValidator.handle(packet);
-                if (cancelled && Boar.getConfig().disableMitigations()) {
+                if (cancelled && player.disableMitigations()) {
                     player.getCheckHolder().manuallyFail(Inventory.class,
                             "invalid transaction, type=" + packet.getTransactionType() + ", action=" + packet.getActionType());
                 }
 //                if (cancelled) {
 //                    System.out.println("Cancel inventory action: " + packet);
 //                }
-                event.setCancelled(cancelled && !Boar.getConfig().disableMitigations());
+                event.setCancelled(cancelled && !player.disableMitigations());
             } catch (Exception exception) {
                 Boar.getInstance().getPlatform().logger().error(
                         "Failed to validate inventory transaction for player " + player.getSession().name()
@@ -46,7 +46,7 @@ public class PlayerInventoryPackets implements PacketListener {
         }
 
         if (event.getPacket() instanceof ItemStackRequestPacket packet) {
-            if (!player.transactionValidator.handle(packet) && Boar.getConfig().disableMitigations()) {
+            if (!player.transactionValidator.handle(packet) && player.disableMitigations()) {
                 player.getCheckHolder().manuallyFail(Inventory.class, "invalid item stack request");
             }
         }

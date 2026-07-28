@@ -1,6 +1,5 @@
 package ac.boar.anticheat.check.impl.badpackets;
 
-import ac.boar.anticheat.Boar;
 import ac.boar.anticheat.check.api.BaseCheck;
 import ac.boar.anticheat.check.api.impl.PacketCheck;
 import ac.boar.anticheat.player.BoarPlayer;
@@ -32,7 +31,7 @@ public class BadPacketB extends BaseCheck implements PacketCheck {
         }
 
         // Should be safe to kick?
-        if (!Boar.getConfig().disableMitigations()) {
+        if (!player.disableMitigations()) {
             player.kick("Invalid auth input packet!");
         }
     }

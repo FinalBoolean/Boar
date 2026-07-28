@@ -41,7 +41,7 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
         final long claimedTick = packet.getTick();
 
         if (claimedTick < 0) { // Impossible, no way this can happen.
-            if (Boar.getConfig().disableMitigations()) {
+            if (player.disableMitigations()) {
                 player.getCheckHolder().manuallyFail(BadPacketA.class, "impossible tick=" + claimedTick);
             } else {
                 player.kick("Impossible tick id=" + claimedTick);
@@ -54,7 +54,7 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
 
         final Timer timer = (Timer) player.getCheckHolder().get(Timer.class);
         if (timer != null && timer.isInvalid()) {
-            if (!Boar.getConfig().disableMitigations()) {
+            if (!player.disableMitigations()) {
                 event.setCancelled(true);
                 Boar.debug("[movement-debug] cancelled auth-input reason=timer tick=" + player.tick + " packetTick=" + packet.getTick() + " pos=" + packet.getPosition() + " delta=" + packet.getDelta(), Boar.DebugMessage.WARNING);
                 return;
@@ -109,7 +109,7 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
         // There isn't much room to abuse considering they're not loaded in any way... and the position is validated so
         // the player can't just send a position 100000 blocks out to avoid for eg: velocity.
         // TODO: Test properly uhhhh in some cases, I'm too lazy to care.
-        if (player.insideUnloadedChunk && !Boar.getConfig().disableMitigations()) {
+        if (player.insideUnloadedChunk && !player.disableMitigations()) {
             player.getTeleportUtil().teleport(player.getTeleportUtil().getLastKnowValid());
         }
 

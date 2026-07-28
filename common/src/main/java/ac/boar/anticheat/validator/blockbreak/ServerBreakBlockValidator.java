@@ -1,7 +1,6 @@
 package ac.boar.anticheat.validator.blockbreak;
 
 import ac.boar.api.anticheat.annotations.CheckInfo;
-import ac.boar.anticheat.Boar;
 import ac.boar.anticheat.check.api.BaseCheck;
 import ac.boar.anticheat.data.BreakingData;
 import ac.boar.anticheat.data.block.BoarBlockState;
@@ -121,7 +120,7 @@ public class ServerBreakBlockValidator extends BaseCheck {
             validActions.add(action);
         }
 
-        if (Boar.getConfig().disableMitigations()) {
+        if (player.disableMitigations()) {
             return;
         }
 
@@ -134,7 +133,7 @@ public class ServerBreakBlockValidator extends BaseCheck {
     }
 
     private void failWithoutMitigation(String verbose) {
-        if (Boar.getConfig().disableMitigations()) {
+        if (player.disableMitigations()) {
             fail(verbose);
         }
     }

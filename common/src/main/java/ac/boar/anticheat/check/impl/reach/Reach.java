@@ -60,10 +60,10 @@ public final class Reach extends BaseCheck implements PacketCheck {
             // However, I think this should be moved into a separate bad packet check since it's not vanilla behaviour.
             if (MathUtil.wrapDegrees(Math.abs(player.yaw - player.interactRotation.getY())) > 110) {
                 this.lastKnowHitWasValid = false;
-                if (Boar.getConfig().disableMitigations()) {
+                if (player.disableMitigations()) {
                     this.fail("invalid touch rotation, yaw=" + player.yaw + ", interactYaw=" + player.interactRotation.getY());
                 }
-                if (!Boar.getConfig().disableMitigations()) {
+                if (!player.disableMitigations()) {
                     event.setCancelled(true);
                 }
                 Boar.debug("[reach-debug] cancelled immediate reason=touch-fov runtimeId=" + packet.getRuntimeEntityId() + " yaw=" + player.yaw + " interactYaw=" + player.interactRotation.getY(), Boar.DebugMessage.WARNING);
@@ -84,7 +84,7 @@ public final class Reach extends BaseCheck implements PacketCheck {
         final float immediateReach = ReachUtil.calculateReach(player, pair, entity);
         Boar.debug("[reach-debug] attack runtimeId=" + packet.getRuntimeEntityId() + " immediateReach=" + immediateReach + " tolerance=" + Boar.getConfig().toleranceReach() + " lastKnownValid=" + this.lastKnowHitWasValid + " entityPos=" + entity.getCurrent().getPos() + " target=" + entity.getCurrent().getInterpolator().getTargetPos() + " step=" + entity.getCurrent().getInterpolator().getStep(), Boar.DebugMessage.INFO);
         if (immediateReach > Boar.getConfig().toleranceReach()) {
-            if (!this.lastKnowHitWasValid && !Boar.getConfig().disableMitigations()) {
+            if (!this.lastKnowHitWasValid && !player.disableMitigations()) {
                 event.setCancelled(true);
                 Boar.debug("[reach-debug] cancelled immediate reason=reach runtimeId=" + packet.getRuntimeEntityId() + " reach=" + immediateReach, Boar.DebugMessage.WARNING);
             }
