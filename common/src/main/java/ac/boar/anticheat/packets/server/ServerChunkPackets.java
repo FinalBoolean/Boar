@@ -71,13 +71,17 @@ public class ServerChunkPackets implements PacketListener {
             try {
                 for (int i = 0; i < subChunksCount; i++) {
                     final int start = buf.readerIndex();
-                    final ChunkDecoder.DecodedSubChunk decoded = ChunkDecoder.readSubChunk(buf, airId, i, dimension.minY());
+                    // Measure the byte range of the sub-chunk without a decode. On a cache hit, no
+                    // decode occurs. On a cache miss, the decoder below reads this slice.
+                    final int sectionY = ChunkDecoder.skipSubChunk(buf, i, dimension.minY());
                     final int end = buf.readerIndex();
-                    if (decoded.sectionY() < 0 || decoded.sectionY() >= sections.length) {
+                    if (sectionY < 0 || sectionY >= sections.length) {
                         continue;
                     }
+                    final int index = i;
                     final ByteBuf slice = buf.slice(start, end - start);
-                    sections[decoded.sectionY()] = cache.getOrDecode(slice, airId, decoded::section);
+                    sections[sectionY] = cache.getOrDecode(slice, airId,
+                            () -> ChunkDecoder.readSubChunk(slice, airId, index, dimension.minY()).section());
                 }
 
                 // Ignore the rest, I only need the chunk data.

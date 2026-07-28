@@ -40,10 +40,9 @@ public final class BoarChunkSection {
         this(new BlockStorage[]{new BlockStorage(initialBlockId), new BlockStorage(initialBlockId)});
     }
 
-    public BlockStorage[] storage() {
-        return this.storage;
-    }
-
+    // This class has no storage() accessor on purpose. Access to the internal array would let callers
+    // change a shared section and bypass the copy-on-write rule. All access goes through getFullBlock
+    // and setFullBlock.
     public boolean isShared() {
         return this.shared;
     }
