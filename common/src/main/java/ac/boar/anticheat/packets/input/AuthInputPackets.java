@@ -133,6 +133,7 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
                 packet.setMode(MovePlayerPacket.Mode.TELEPORT);
             }
 
+            packet.setOnGround(true);
             player.getTeleportUtil().queue(new TeleportData(new Vec3(packet.getPosition()), packet.isOnGround()));
         }
     }

@@ -32,6 +32,8 @@ import java.util.Optional;
 @Setter
 @Getter
 public class CompensatedWorld {
+    private static final int INITIAL_CHUNK_CLEANUP_DELAY_TICKS = 300;
+
     private final BoarPlayer player;
     private final Long2ObjectMap<BoarChunk> chunks = new Long2ObjectOpenHashMap<>();
     private final LongSet exemptedChunks = new LongOpenHashSet();
@@ -80,6 +82,7 @@ public class CompensatedWorld {
 
     private int viewDistance = 16;
     private long lastChunkClean = Long.MIN_VALUE;
+    private int chunkCleanupDelayTicks = INITIAL_CHUNK_CLEANUP_DELAY_TICKS;
 
     public void setViewDistance(int viewDistance) {
         // The client always uses the server chunk view distance plus 1 unconditionally regardless of the radius it requested. It's also why we can get away with
@@ -89,6 +92,11 @@ public class CompensatedWorld {
 
     public void cleanChunksAtPlayerPosition() {
         if (this.player == null) {
+            return;
+        }
+
+        if (this.chunkCleanupDelayTicks > 0) {
+            this.chunkCleanupDelayTicks--;
             return;
         }
 
