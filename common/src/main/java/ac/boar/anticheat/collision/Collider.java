@@ -4,11 +4,11 @@ import ac.boar.anticheat.data.EntityDimensions;
 import ac.boar.anticheat.player.BoarPlayer;
 import ac.boar.anticheat.player.data.PlayerData;
 import ac.boar.anticheat.util.MathUtil;
-import ac.boar.anticheat.util.math.Axis;
 import ac.boar.anticheat.util.math.Box;
 import ac.boar.anticheat.util.math.Vec3;
 import org.cloudburstmc.protocol.bedrock.data.entity.EntityFlag;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Collider {
@@ -74,75 +74,230 @@ public class Collider {
     }
 
     public static Vec3 collide(final BoarPlayer player, Vec3 movement) {
-        Box box = player.boundingBox.clone();
-        List<Box> collisions = player.compensatedWorld.getEntityCollisions(box.stretch(movement));
-        Vec3 lv2 = movement.lengthSquared() == 0.0 ? movement : collideBoundingBox(player, movement, box, collisions);
-        boolean collisionX = movement.x != lv2.x, collisionZ = movement.z != lv2.z;
-        boolean verticalCollision = movement.y != lv2.y;
-        boolean onGround = verticalCollision && movement.y < 0.0;
-        if ((onGround || player.onGround) && (collisionX || collisionZ)) {
-            Vec3 vec32 = collideBoundingBox(player, new Vec3(movement.x, PlayerData.STEP_HEIGHT, movement.z), box, collisions);
-            Vec3 vec33 = collideBoundingBox(player, new Vec3(0, PlayerData.STEP_HEIGHT, 0), box.stretch(movement.x, 0, movement.z), collisions);
-            if (vec33.y < PlayerData.STEP_HEIGHT) {
-                Vec3 vec34 = collideBoundingBox(player, new Vec3(movement.x, 0, movement.z), box.offset(vec33), collisions).add(vec33);
-                if (vec34.horizontalLengthSquared() > vec32.horizontalLengthSquared()) {
-                    vec32 = vec34;
-                }
-            }
+        return collide(player, movement, player.stuckInCollider, null);
+    }
 
-            if (vec32.horizontalLengthSquared() > lv2.horizontalLengthSquared()) {
-                lv2 = vec32.add(collideBoundingBox(player, new Vec3(0, -vec32.y, 0), box.offset(vec32), collisions));
+    public static Vec3 collide(final BoarPlayer player, final Vec3 movement, final boolean oneWay, final Vec3 penetration) {
+        Box boundingBox = player.boundingBox.clone();
+        Box sweptBox = boundingBox.stretch(movement);
+        List<Box> colliders = player.compensatedWorld.collectColliders(
+                player.compensatedWorld.getEntityCollisions(sweptBox),
+                sweptBox
+        );
+
+        MovementResult collisionResult = collideWithAxes(boundingBox, movement, colliders, oneWay, penetration);
+        Vec3 collisionVelocity = collisionResult.velocity();
+
+        boolean collisionX = movement.x != collisionVelocity.x;
+        boolean collisionY = movement.y != collisionVelocity.y;
+        boolean collisionZ = movement.z != collisionVelocity.z;
+        boolean onGround = player.onGround || collisionY && movement.y < 0.0F;
+
+        if (onGround && (collisionX || collisionZ)) {
+            MovementResult stepResult = calculateAutoStep(boundingBox, movement, colliders, oneWay);
+            if (player.compensatedWorld.noCollision(stepResult.boundingBox())
+                    && collisionVelocity.horizontalLengthSquared() < stepResult.velocity().horizontalLengthSquared()
+                    && clientAcceptsAutoStep(player, collisionVelocity, stepResult.velocity())) {
+                collisionVelocity = stepResult.velocity();
             }
         }
 
-        return lv2;
+        return collisionVelocity;
     }
 
-    private static Vec3 collideBoundingBox(final BoarPlayer player, final Vec3 movement, final Box box, final List<Box> collisions) {
-        collisions.addAll(player.compensatedWorld.collectColliders(collisions, box.stretch(movement)));
-        return collideWithShapes(movement, box, collisions);
+    private static boolean clientAcceptsAutoStep(final BoarPlayer player, final Vec3 collisionVelocity, final Vec3 stepVelocity) {
+        float collisionDistance = player.position.add(collisionVelocity).distanceTo(player.unvalidatedPosition);
+        float stepDistance = player.position.add(stepVelocity).distanceTo(player.unvalidatedPosition);
+        return collisionDistance > player.getMaxOffset() || stepDistance <= collisionDistance;
     }
 
-    private static Vec3 collideWithShapes(final Vec3 movement, Box box, final List<Box> collisions) {
-        if (!collisions.isEmpty()) {
-            float x = movement.x;
-            float y = movement.y;
-            float z = movement.z;
-            if (y != 0.0) {
-                y = calculateMaxOffset(Axis.Y, box, collisions, y);
-                if (y != 0.0) {
-                    box = box.offset(0, y, 0);
+    private static MovementResult collideWithAxes(final Box originalBox, final Vec3 movement, final List<Box> colliders,
+                                                  final boolean oneWay, final Vec3 penetration) {
+        Vec3 yVelocity = new Vec3(0, movement.y, 0);
+        Vec3 xVelocity = new Vec3(movement.x, 0, 0);
+        Vec3 zVelocity = new Vec3(0, 0, movement.z);
+        Box boundingBox = originalBox;
+
+        yVelocity = clipAgainstColliders(colliders, boundingBox, yVelocity, oneWay, penetration);
+        boundingBox = boundingBox.offset(yVelocity);
+
+        xVelocity = clipAgainstColliders(colliders, boundingBox, xVelocity, oneWay, penetration);
+        boundingBox = boundingBox.offset(xVelocity);
+
+        zVelocity = clipAgainstColliders(colliders, boundingBox, zVelocity, oneWay, penetration);
+        boundingBox = boundingBox.offset(zVelocity);
+
+        return new MovementResult(boundingBox, yVelocity.add(xVelocity).add(zVelocity));
+    }
+
+    private static MovementResult calculateAutoStep(final Box originalBox, final Vec3 movement, final List<Box> colliders,
+                                                    final boolean oneWay) {
+        List<Box> stepColliders = new ArrayList<>(colliders.size());
+        for (Box collider : colliders) {
+            if (collider.minY < originalBox.maxY) {
+                stepColliders.add(collider);
+            }
+        }
+
+        Vec3 upVelocity = new Vec3(0, PlayerData.STEP_HEIGHT, 0);
+        Vec3 xVelocity = new Vec3(movement.x, 0, 0);
+        Vec3 zVelocity = new Vec3(0, 0, movement.z);
+        Box boundingBox = originalBox;
+
+        upVelocity = clipAgainstColliders(stepColliders, boundingBox, upVelocity, oneWay, null);
+        boundingBox = boundingBox.offset(upVelocity);
+
+        xVelocity = clipAgainstColliders(stepColliders, boundingBox, xVelocity, oneWay, null);
+        boundingBox = boundingBox.offset(xVelocity);
+
+        zVelocity = clipAgainstColliders(stepColliders, boundingBox, zVelocity, oneWay, null);
+        boundingBox = boundingBox.offset(zVelocity);
+
+        Vec3 downVelocity = clipAgainstColliders(stepColliders, boundingBox, upVelocity.multiply(-1.0F), oneWay, null);
+        boundingBox = boundingBox.offset(downVelocity);
+
+        Vec3 stepVelocity = upVelocity.add(xVelocity).add(zVelocity).add(downVelocity);
+        return new MovementResult(boundingBox, stepVelocity);
+    }
+
+    private static Vec3 clipAgainstColliders(final List<Box> colliders, final Box moving, Vec3 velocity,
+                                             final boolean oneWay, final Vec3 penetration) {
+        for (int index = colliders.size() - 1; index >= 0; index--) {
+            velocity = clipCollide(colliders.get(index), moving, velocity, oneWay, penetration);
+        }
+        return velocity;
+    }
+
+    static Vec3 clipCollide(final Box stationary, final Box moving, final Vec3 velocity,
+                            final boolean oneWay, final Vec3 penetration) {
+        ClipCollideResult result = doClipCollide(stationary, moving, velocity);
+        if (penetration != null && component(penetration, result.depenetratingAxis) < result.penetration) {
+            setComponent(penetration, result.depenetratingAxis, result.penetration);
+        }
+        return oneWay ? result.clippedVelocity : result.depenetratingVelocity;
+    }
+
+    private static ClipCollideResult doClipCollide(final Box stationary, final Box moving, final Vec3 velocity) {
+        ClipCollideResult result = new ClipCollideResult(velocity);
+        if (stationary.minX == stationary.maxX
+                && stationary.minY == stationary.maxY
+                && stationary.minZ == stationary.maxZ) {
+            return result;
+        }
+
+        float[] stationaryMin = {stationary.minX, stationary.minY, stationary.minZ};
+        float[] stationaryMax = {stationary.maxX, stationary.maxY, stationary.maxZ};
+        float[] movingMin = {moving.minX, moving.minY, moving.minZ};
+        float[] movingMax = {moving.maxX, moving.maxY, moving.maxZ};
+        float[] axisPenetrations = new float[3];
+        float[] signedAxisPenetrations = new float[3];
+        float[] normalDirections = new float[3];
+
+        int separatingAxes = 0;
+        int separatingAxis = 0;
+        float resultPenetration = Float.MAX_VALUE;
+
+        for (int axis = 0; axis < 3; axis++) {
+            float minPenetration = movingMax[axis] - stationaryMin[axis];
+            float maxPenetration = stationaryMax[axis] - movingMin[axis];
+
+            if (Math.abs(minPenetration) <= Box.EPSILON) {
+                minPenetration = 0.0F;
+            }
+            if (Math.abs(maxPenetration) <= Box.EPSILON) {
+                maxPenetration = 0.0F;
+            }
+
+            float positiveMinPenetration = Math.max(0.0F, minPenetration);
+            float positiveMaxPenetration = Math.max(0.0F, maxPenetration);
+
+            if (positiveMinPenetration == 0.0F) {
+                axisPenetrations[axis] = 0.0F;
+                signedAxisPenetrations[axis] = minPenetration;
+                normalDirections[axis] = -1.0F;
+                separatingAxes++;
+                separatingAxis = axis;
+            } else if (positiveMaxPenetration == 0.0F) {
+                axisPenetrations[axis] = 0.0F;
+                signedAxisPenetrations[axis] = maxPenetration;
+                normalDirections[axis] = 1.0F;
+                separatingAxes++;
+                separatingAxis = axis;
+            } else if (positiveMinPenetration < positiveMaxPenetration) {
+                axisPenetrations[axis] = positiveMinPenetration;
+                signedAxisPenetrations[axis] = positiveMinPenetration;
+                normalDirections[axis] = -1.0F;
+            } else {
+                axisPenetrations[axis] = positiveMaxPenetration;
+                signedAxisPenetrations[axis] = positiveMaxPenetration;
+                normalDirections[axis] = 1.0F;
+            }
+
+            if (separatingAxes > 1) {
+                return result;
+            }
+            resultPenetration = Math.min(resultPenetration, axisPenetrations[axis]);
+        }
+
+        if (separatingAxes == 0) {
+            result.penetration = resultPenetration;
+            int bestAxis = 0;
+            for (int axis = 1; axis < 3; axis++) {
+                if (axisPenetrations[axis] < axisPenetrations[bestAxis]) {
+                    bestAxis = axis;
                 }
             }
 
-            if (x != 0.0) {
-                x = calculateMaxOffset(Axis.X, box, collisions, x);
-                if (x != 0.0) {
-                    box = box.offset(x, 0, 0);
-                }
-            }
-
-            if (z != 0.0) {
-                z = calculateMaxOffset(Axis.Z, box, collisions, z);
-            }
-
-            return new Vec3(x, y, z);
+            float desiredVelocity = axisPenetrations[bestAxis] * normalDirections[bestAxis];
+            float currentVelocity = component(velocity, bestAxis);
+            float resolvedVelocity = desiredVelocity > 0.0F
+                    ? Math.max(desiredVelocity, currentVelocity)
+                    : Math.min(desiredVelocity, currentVelocity);
+            setComponent(result.depenetratingVelocity, bestAxis, resolvedVelocity);
+            result.depenetratingAxis = bestAxis;
+            return result;
         }
 
-        return movement;
+        float sweptPenetration = signedAxisPenetrations[separatingAxis]
+                - normalDirections[separatingAxis] * component(velocity, separatingAxis);
+        if (sweptPenetration <= 0.0F) {
+            return result;
+        }
+
+        float resolvedVelocity = signedAxisPenetrations[separatingAxis] * normalDirections[separatingAxis];
+        setComponent(result.clippedVelocity, separatingAxis, resolvedVelocity);
+        setComponent(result.depenetratingVelocity, separatingAxis, resolvedVelocity);
+        return result;
     }
 
-    private static float calculateMaxOffset(final Axis axis, final Box boundingBox, final List<Box> collision, float maxDist) {
-        Box box = boundingBox.clone();
+    private static float component(final Vec3 vector, final int axis) {
+        return switch (axis) {
+            case 0 -> vector.x;
+            case 1 -> vector.y;
+            default -> vector.z;
+        };
+    }
 
-        for (Box bb : collision) {
-            if (Math.abs(maxDist) < Box.EPSILON) {
-                return 0;
-            }
-
-            maxDist = bb.calculateMaxDistance(axis, box, maxDist);
+    private static void setComponent(final Vec3 vector, final int axis, final float value) {
+        switch (axis) {
+            case 0 -> vector.x = value;
+            case 1 -> vector.y = value;
+            default -> vector.z = value;
         }
+    }
 
-        return maxDist;
+    private record MovementResult(Box boundingBox, Vec3 velocity) {
+    }
+
+    private static final class ClipCollideResult {
+        private int depenetratingAxis;
+        private float penetration;
+        private final Vec3 clippedVelocity;
+        private final Vec3 depenetratingVelocity;
+
+        private ClipCollideResult(final Vec3 velocity) {
+            this.clippedVelocity = velocity.clone();
+            this.depenetratingVelocity = velocity.clone();
+        }
     }
 }
