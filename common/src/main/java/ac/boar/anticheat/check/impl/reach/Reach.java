@@ -103,7 +103,7 @@ public final class Reach extends BaseCheck implements PacketCheck {
                 this.resolveInvalid(attack);
             } else {
                 player.injectClientPacket(attack.packet);
-                this.buffer = Math.max(this.buffer - 0.002f, 0f);
+                this.buffer = Math.max(this.buffer - 0.01f, 0f);
             }
         }
 
