@@ -98,7 +98,7 @@ public final class Reach extends BaseCheck implements PacketCheck {
                     //this.fail("failed to find entity in sight.");
                 } else {
                     Boar.debug("[reach-debug] fail reason=distance distance=" + reach + " tolerance=" + Boar.getConfig().toleranceReach(), Boar.DebugMessage.WARNING);
-                    this.fail("entity out of range, distance=" + reach);
+                    this.fail("distance=" + reach);
                 }
                 this.resolveInvalid(attack);
             } else {
