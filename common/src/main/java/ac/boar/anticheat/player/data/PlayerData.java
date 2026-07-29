@@ -40,8 +40,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @RequiredArgsConstructor
 public class PlayerData {
-    private final static AttributeModifierData SPRINTING_SPEED_BOOST = new AttributeModifierData("D208FC00-42AA-4AAD-9276-D5446530DE43",
-            "Sprinting speed boost",
+    public final static AttributeModifierData SPRINTING_SPEED_BOOST = new AttributeModifierData("D208FC00-42AA-4AAD-9276-D5446530DE43",
+            "Sprinting speed boost - BOAR",
             0.3F, AttributeOperation.MULTIPLY_TOTAL, 2, false);
 
     public final static float JUMP_HEIGHT = 0.42F;

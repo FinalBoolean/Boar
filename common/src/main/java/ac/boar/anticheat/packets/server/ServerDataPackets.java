@@ -10,6 +10,7 @@ import ac.boar.anticheat.compensated.cache.container.ContainerCache;
 import ac.boar.anticheat.compensated.cache.entity.EntityCache;
 import ac.boar.anticheat.data.inventory.BoarItemStack;
 import ac.boar.anticheat.player.BoarPlayer;
+import ac.boar.anticheat.player.data.PlayerData;
 import ac.boar.anticheat.util.DimensionUtil;
 import ac.boar.anticheat.validator.blockbreak.ServerBreakBlockValidator;
 import ac.boar.mappings.item.Items;
@@ -155,7 +156,7 @@ public class ServerDataPackets implements PacketListener {
         }
     }
 
-    private static AttributeData stripModifiers(AttributeData data) {
+    public static AttributeData stripModifiers(AttributeData data) {
         if (data.getName().equals("minecraft:movement") || data.getName().equals("minecraft:underwater_movement") || data.getName().equals("minecraft:lava_movement")) {
             if (data.getModifiers().isEmpty()) {
                 return data;
@@ -174,7 +175,7 @@ public class ServerDataPackets implements PacketListener {
                 }
             }
             for (final AttributeModifierData modifier : data.getModifiers()) {
-                if (modifier.getOperation() == AttributeOperation.MULTIPLY_TOTAL) {
+                if (modifier.getOperation() == AttributeOperation.MULTIPLY_TOTAL && !modifier.equals(PlayerData.SPRINTING_SPEED_BOOST)) {
                     newValue *= (1.0F + modifier.getAmount());
                 }
             }
