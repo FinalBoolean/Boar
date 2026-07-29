@@ -22,6 +22,8 @@ import org.cloudburstmc.protocol.bedrock.data.entity.EntityFlag;
 
 @RequiredArgsConstructor
 public class EntityTicker {
+    private static final float COLLISION_EPSILON = 1.0E-5F;
+
     protected final BoarPlayer player;
 
     public void tick() {
@@ -143,19 +145,31 @@ public class EntityTicker {
         }
 
         Vec3 oldVec3 = vec3.clone();
-        Vec3 vec32 = Collider.collide(player, vec3 = Collider.maybeBackOffFromEdge(player, vec3));
+        boolean wasOnGround = player.onGround;
+        Vec3 penetration = Vec3.ZERO.clone();
+        Vec3 vec32 = Collider.collide(
+                player,
+                vec3 = Collider.maybeBackOffFromEdge(player, vec3),
+                player.stuckInCollider,
+                penetration
+        );
+        boolean hasPenetration = penetration.lengthSquared() >= 1.0E-11F;
+        player.stuckInCollider = player.penetratedLastFrame && hasPenetration;
+        player.penetratedLastFrame = hasPenetration;
         player.setPos(player.position.add(vec32));
 
-        boolean collidedX = !MathUtil.equal(vec3.x, vec32.x);
-        boolean collidedZ = !MathUtil.equal(vec3.z, vec32.z);
+        boolean collidedX = Math.abs(vec3.x - vec32.x) >= COLLISION_EPSILON;
+        boolean collidedZ = Math.abs(vec3.z - vec32.z) >= COLLISION_EPSILON;
         player.horizontalCollision = collidedX || collidedZ;
-        player.verticalCollision = vec3.y != vec32.y;
-        player.onGround = player.verticalCollision && vec3.y < 0.0;
+        player.verticalCollision = Math.abs(vec3.y - vec32.y) >= COLLISION_EPSILON;
+        player.onGround = (player.verticalCollision && vec3.y < 0.0F)
+                || (wasOnGround && !player.verticalCollision && Math.abs(vec3.y) <= COLLISION_EPSILON);
 
         // Hacks for when the player is taking zero velocity but still on ground next tick for whatever reason.
         // They will claim to be not colliding vertically this tick but still act like they're on ground next tick, nice.
         if (vec3.y == 0 && player.bestPossibility.getVelocity().y == 0 && player.bestPossibility.getType() == VectorType.VELOCITY && !MathUtil.equal(player.lastTickFinalVelocity.y, 0)) {
-            player.verticalCollision = Collider.collide(player, player.lastTickFinalVelocity.clone()).y != player.lastTickFinalVelocity.y;
+            Vec3 lastTickCollision = Collider.collide(player, player.lastTickFinalVelocity.clone());
+            player.verticalCollision = Math.abs(lastTickCollision.y - player.lastTickFinalVelocity.y) >= COLLISION_EPSILON;
             player.onGround = player.verticalCollision && player.lastTickFinalVelocity.y < 0;
         }
 
