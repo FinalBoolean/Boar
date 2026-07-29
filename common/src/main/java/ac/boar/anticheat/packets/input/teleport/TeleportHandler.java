@@ -38,6 +38,7 @@ public class TeleportHandler {
         player.velocity = Vec3.ZERO.clone();
         player.predictionResult = new PredictionData(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO);
         player.onGround = data.isOnGround();
+        player.getTeleportUtil().updateLastKnownValid(data.getPosition());
 
         System.out.println("got teleport: [pos=" + player.position + " onGround=" + player.onGround + " tick=" + packet.getTick() + "]");
     }

@@ -37,9 +37,13 @@ public class Prediction extends BaseCheck implements OffsetHandlerCheck {
             return;
         }
 
+        if (!this.shouldDoFail()) {
+            return;
+        }
+
         Boar.debug("[movement-debug] prediction offset tick=" + player.tick + " offset=" + offset + " max=" + player.getMaxOffset() + " alert=" + Boar.getConfig().alertThreshold() + " type=" + player.bestPossibility.getType() + " predictedPos=" + player.position + " actualPos=" + player.unvalidatedPosition + " predictedDelta=" + player.velocity + " actualDelta=" + player.unvalidatedTickEnd, Boar.DebugMessage.WARNING);
 
-        if (!shouldDoFail() || (offset < Boar.getConfig().alertThreshold() && !player.disableMitigations())) {
+        if (offset < Boar.getConfig().alertThreshold() && !player.disableMitigations()) {
             Boar.debug("[movement-debug] correction reason=prediction-soft tick=" + player.tick + " offset=" + offset, Boar.DebugMessage.WARNING);
             player.getTeleportUtil().correct();
             return;
@@ -80,7 +84,21 @@ public class Prediction extends BaseCheck implements OffsetHandlerCheck {
     }
 
     public boolean shouldDoFail() {
-        return player.tickSinceBlockResync <= 0 && !player.insideUnloadedChunk && !player.getTeleportUtil().isTeleporting() && !player.getTeleportUtil().hasPendingCorrection() && !player.getTeleportUtil().isCorrectionCooldown() && player.sinceLoadingScreen > 5 && player.compensatedWorld.isChunkLoadedAt(player.position.x, player.position.z);
+        return this.canFlagMovement();
+    }
+
+    private boolean canFlagMovement() {
+        return player.tickSinceBlockResync <= 0
+                && !player.insideUnloadedChunk
+                && !player.getTeleportUtil().isTeleporting()
+                && !player.getTeleportUtil().hasPendingCorrection()
+                && !player.getTeleportUtil().isCorrectionCooldown()
+                && !player.isMovementExempted()
+                && !player.inLoadingScreen
+                && player.sinceLoadingScreen > 5
+                && player.compensatedWorld.isChunkLoadedAt(player.position.x, player.position.z)
+                && player.compensatedWorld.isChunkLoadedAt(
+                        player.unvalidatedPosition.x, player.unvalidatedPosition.z);
     }
 
     public void fail(String name, String verbose) {

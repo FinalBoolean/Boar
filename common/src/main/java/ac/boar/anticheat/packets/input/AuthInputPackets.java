@@ -68,6 +68,8 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
 
         LegacyAuthInputPackets.processAuthInput(player, packet, true);
         LegacyAuthInputPackets.updateUnvalidatedPosition(player, packet);
+        player.insideUnloadedChunk = !player.compensatedWorld.isChunkLoadedAt(
+                player.unvalidatedPosition.x, player.unvalidatedPosition.z);
 
         final Reach reach = (Reach) player.getCheckHolder().get(Reach.class);
         if (reach != null) { // null when the Reach check is disabled via disabled-checks - don't NPE.
@@ -88,26 +90,28 @@ public class AuthInputPackets extends TeleportHandler implements PacketListener 
 
         if (player.getTeleportUtil().isTeleporting()) {
             this.processQueuedTeleports(player, packet);
+        } else if (player.insideUnloadedChunk) {
+            player.velocity = Vec3.ZERO.clone();
         } else {
-            if (player.isMovementExempted()) {
+            if (player.isMovementExempted()
+                    || player.inLoadingScreen
+                    || player.sinceLoadingScreen < 2
+                    || player.tickSinceBlockResync > 0) {
                 processExempted(player);
             } else {
-                if (!player.inLoadingScreen && player.sinceLoadingScreen >= 2 || player.unvalidatedTickEnd.lengthSquared() > 0) {
-                    new PredictionRunner(player).run();
-                } else {
-                    player.velocity = Vec3.ZERO.clone();
-                }
+                new PredictionRunner(player).run();
             }
         }
 
         player.compensatedWorld.cleanChunksAtPlayerPosition();
-        player.insideUnloadedChunk = !player.compensatedWorld.isChunkLoadedAt(player.position.x, player.position.z);
+        player.insideUnloadedChunk = !player.compensatedWorld.isChunkLoadedAt(
+                player.unvalidatedPosition.x, player.unvalidatedPosition.z);
         // Don't try to predict player position in an unloaded chunk, it's not worth it and uh won't go well!
         // Just keep teleporting the player back until they loaded in, that way we shouldn't false post teleport... I think!
         // There isn't much room to abuse considering they're not loaded in any way... and the position is validated so
         // the player can't just send a position 100000 blocks out to avoid for eg: velocity.
         // TODO: Test properly uhhhh in some cases, I'm too lazy to care.
-        if (player.insideUnloadedChunk && !player.disableMitigations()) {
+        if (player.insideUnloadedChunk && !player.inLoadingScreen && !player.disableMitigations()) {
             player.getTeleportUtil().teleport(player.getTeleportUtil().getLastKnownValid());
         }
 

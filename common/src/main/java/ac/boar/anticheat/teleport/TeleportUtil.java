@@ -49,8 +49,17 @@ public class TeleportUtil {
 
     public void queue(TeleportData data) {
         this.queuedTeleports.add(data);
-        this.lastKnownValid = data.getPosition().clone();
         player.sendLatencyStack(new TeleportAcceptAck(data));
+    }
+
+    /**
+     * Resets all teleport state to a position that the server already established.
+     */
+    public void reset(Vec3 position) {
+        this.queuedTeleports.clear();
+        this.lastKnownValid = position.clone();
+        this.pendingCorrections = 0;
+        this.correctionCooldown = false;
     }
 
     public boolean isTeleporting() {
@@ -72,7 +81,7 @@ public class TeleportUtil {
     }
 
     public void updateLastKnownValid(Vec3 position) {
-        this.lastKnownValid = position;
+        this.lastKnownValid = position.clone();
     }
 
     public void setCorrectionCooldown(boolean correctionCooldown) {

@@ -8,10 +8,12 @@ import ac.boar.anticheat.ack.types.UpdateAbilitiesAck;
 import ac.boar.anticheat.ack.types.UpdateAttributesAck;
 import ac.boar.anticheat.compensated.cache.container.ContainerCache;
 import ac.boar.anticheat.compensated.cache.entity.EntityCache;
+import ac.boar.anticheat.data.input.PredictionData;
 import ac.boar.anticheat.data.inventory.BoarItemStack;
 import ac.boar.anticheat.player.BoarPlayer;
 import ac.boar.anticheat.player.data.PlayerData;
 import ac.boar.anticheat.util.DimensionUtil;
+import ac.boar.anticheat.util.math.Vec3;
 import ac.boar.anticheat.validator.blockbreak.ServerBreakBlockValidator;
 import ac.boar.mappings.item.Items;
 import ac.boar.protocol.api.CloudburstPacketEvent;
@@ -41,7 +43,19 @@ public class ServerDataPackets implements PacketListener {
         if (event.getPacket() instanceof StartGamePacket start) {
             player.runtimeEntityId = start.getRuntimeEntityId();
 
+            final Vec3 wirePosition = new Vec3(start.getPlayerPosition());
+            final Vec3 playerPosition = wirePosition.down(player.getYOffset());
+            player.compensatedWorld.clearChunks();
             player.compensatedWorld.setDimension(DimensionUtil.dimensionFromId(start.getDimensionId()));
+            player.setPos(playerPosition, false);
+            player.prevPosition = playerPosition.clone();
+            player.unvalidatedPosition = playerPosition.clone();
+            player.prevUnvalidatedPosition = playerPosition.clone();
+            player.velocity = Vec3.ZERO.clone();
+            player.lastTickFinalVelocity = Vec3.ZERO.clone();
+            player.predictionResult = new PredictionData(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO);
+            player.insideUnloadedChunk = true;
+            player.getTeleportUtil().reset(wirePosition);
             player.currentLoadingScreen = null;
             player.inLoadingScreen = true;
 

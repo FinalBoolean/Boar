@@ -30,6 +30,12 @@ public class LegacyAuthInputPackets {
 
     public static void doPostPrediction(final BoarPlayer player, final PlayerAuthInputPacket packet) {
         player.postTick();
+
+        if (player.getTeleportUtil().isTeleporting() || player.insideUnloadedChunk) {
+            correctInputData(player, packet);
+            return;
+        }
+
         player.getTeleportUtil().updateLastKnownValid(player.position.up(player.getYOffset()));
 
         final UncertainRunner uncertainRunner = new UncertainRunner(player);
