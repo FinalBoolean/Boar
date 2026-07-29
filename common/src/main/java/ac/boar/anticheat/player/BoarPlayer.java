@@ -35,7 +35,8 @@ import ac.boar.mappings.block.BlockMappings;
 import ac.boar.mappings.entity.Entity;
 import ac.boar.mappings.entity.EntityDefinition;
 import ac.boar.mappings.entity.EntityDefinitions;
-import ac.boar.protocol.BoarHandlerAdaptor;
+import ac.boar.protocol.PacketInjector;
+import io.netty.util.ReferenceCountUtil;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.SneakyThrows;
@@ -82,8 +83,11 @@ public final class BoarPlayer extends PlayerData {
     @Setter
     private BoarAcknowledgmentTransport ackTransport;
 
+    // Platform-provided replay hook. The default platform installs BoarHandlerAdaptor here
+    // (see BoarPlayerManager#installHandlers); platforms that bridge their own packet-event
+    // stream must install their own injector, or injectClientPacket drops every packet.
     @Setter
-    private BoarHandlerAdaptor handlerAdaptor;
+    private PacketInjector packetInjector;
 
     // Lag compensation
     public final CompensatedWorldImpl compensatedWorld = new CompensatedWorldImpl(this);
@@ -177,9 +181,15 @@ public final class BoarPlayer extends PlayerData {
      * caller is responsible for any prior listener-side processing.
      */
     public void injectClientPacket(BedrockPacket packet) {
-        if (this.handlerAdaptor != null) {
-            this.handlerAdaptor.injectClientPacket(packet);
+        if (this.packetInjector == null) {
+            // A missing injector is a platform wiring bug — the packet a check approved for
+            // replay is lost. Log it so the drop is visible, and release the caller's reference.
+            Boar.debug("[inject] dropped " + packet.getClass().getSimpleName()
+                    + " — no packet injector installed", Boar.DebugMessage.WARNING);
+            ReferenceCountUtil.safeRelease(packet);
+            return;
         }
+        this.packetInjector.injectClientPacket(packet);
     }
 
     public boolean isMovementExempted() {

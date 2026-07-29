@@ -18,7 +18,7 @@ import java.io.StringWriter;
 import java.util.List;
 
 @RequiredArgsConstructor
-public class BoarHandlerAdaptor extends MessageToMessageCodec<BedrockPacketWrapper, BedrockPacketWrapper> {
+public class BoarHandlerAdaptor extends MessageToMessageCodec<BedrockPacketWrapper, BedrockPacketWrapper> implements PacketInjector {
     private final BoarPlayer player;
     private final BedrockPacketCodec codec;
 
@@ -44,6 +44,7 @@ public class BoarHandlerAdaptor extends MessageToMessageCodec<BedrockPacketWrapp
      * retain any reference-counted payload before caching — the wrapper built here releases
      * the packet when its own refcount drops to zero.
      */
+    @Override
     public void injectClientPacket(BedrockPacket packet) {
         final ChannelHandlerContext ctx = this.ctx;
         if (ctx == null || player.isClosed()) {

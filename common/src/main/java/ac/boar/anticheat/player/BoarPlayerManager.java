@@ -58,7 +58,7 @@ public abstract class BoarPlayerManager<T> extends HashMap<T, BoarPlayer> {
     protected void installHandlers(BoarPlayer player, Channel channel) {
         BoarHandlerAdaptor handlerAdaptor = new BoarHandlerAdaptor(player, (BedrockPacketCodec) channel.pipeline().get(BedrockPacketCodec.NAME));
         channel.pipeline().addAfter(BedrockPacketCodec.NAME, BoarHandlerAdaptor.NAME, handlerAdaptor);
-        player.setHandlerAdaptor(handlerAdaptor);
+        player.setPacketInjector(handlerAdaptor);
         // Sits between BedrockPacketCodec and BoarHandlerAdaptor in pipeline order — outbound
         // traversal hits us after BoarHandlerAdaptor, so flush() can inject an NSL into the same
         // batch as whatever else is being flushed.
