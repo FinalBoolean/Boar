@@ -31,25 +31,26 @@ public final class EntityCache {
     private EntityDataMap metadata = new EntityDataMap();
 
     public void setMetadata(EntityDataMap metadata) {
-        this.metadata = metadata;
+        this.metadata.putAll(metadata);
 
-        if (metadata.containsKey(EntityDataTypes.WIDTH)) {
-            this.dimensions = EntityDimensions.fixed(metadata.get(EntityDataTypes.WIDTH), this.definition.height());
-        }
-        if (metadata.containsKey(EntityDataTypes.HEIGHT)) {
-            this.dimensions = EntityDimensions.fixed(this.definition.width(), metadata.get(EntityDataTypes.HEIGHT));
-        }
+        float width = this.metadata.containsKey(EntityDataTypes.WIDTH)
+                ? this.metadata.get(EntityDataTypes.WIDTH)
+                : this.definition.width();
+        float height = this.metadata.containsKey(EntityDataTypes.HEIGHT)
+                ? this.metadata.get(EntityDataTypes.HEIGHT)
+                : this.definition.height();
         
-        // This is a hacky workaround for boat since boat is real weird when it comes to collision, at least on GeyserMC.
+        // Geyser uses boat collision dimensions that differ from the behavior data.
         if (this.definition.identifier().equalsIgnoreCase("minecraft:boat") || this.definition.identifier().equalsIgnoreCase("minecraft:chest_boat")) {
-            // This is from debugging which is... ehhhhh, I really don't get why it different from the collision box in behaviour json.
-            // TODO: This is still wrong.
-            this.dimensions = EntityDimensions.fixed(1.6F, 0.575F);
+            // TODO: Verify these dimensions against Bedrock behavior.
+            width = 1.6F;
+            height = 0.575F;
         }
 
-        if (metadata.containsKey(EntityDataTypes.SCALE)) {
-            this.dimensions = this.dimensions.hardScaled(metadata.get(EntityDataTypes.SCALE));
-        }
+        float scale = this.metadata.containsKey(EntityDataTypes.SCALE)
+                ? this.metadata.get(EntityDataTypes.SCALE)
+                : 1.0F;
+        this.dimensions = EntityDimensions.fixed(width * scale, height * scale);
     }
 
     private CachedEntityState current;
