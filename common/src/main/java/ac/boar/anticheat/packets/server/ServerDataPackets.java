@@ -102,6 +102,10 @@ public class ServerDataPackets implements PacketListener {
                 flagsCopy = null;
             }
 
+            if (width != null) {
+                width = Math.max(0f, width - 1e-4f);
+            }
+
             // Dimension seems to be controlled server-side as far as I know (tested with clumsy).
             player.queueAcknowledgment(new PlayerMetadataAck(width, height, scale, flagsCopy, bedPosition));
         }

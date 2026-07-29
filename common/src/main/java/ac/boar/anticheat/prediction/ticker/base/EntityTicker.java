@@ -153,7 +153,9 @@ public class EntityTicker {
                 player.stuckInCollider,
                 penetration
         );
-        boolean hasPenetration = penetration.lengthSquared() >= 1.0E-11F;
+        boolean hasPenetration = exceedsReconstructionNoise(penetration.x, player.position.x)
+                || exceedsReconstructionNoise(penetration.y, player.position.y)
+                || exceedsReconstructionNoise(penetration.z, player.position.z);
         player.stuckInCollider = player.penetratedLastFrame && hasPenetration;
         player.penetratedLastFrame = hasPenetration;
         player.setPos(player.position.add(vec32));
@@ -205,6 +207,10 @@ public class EntityTicker {
 
         player.beforeCollision = vec3.clone();
         player.afterCollision = vec32.clone();
+    }
+
+    private static boolean exceedsReconstructionNoise(float penetration, float coordinate) {
+        return penetration >= Math.max(1.0E-4F, 4.0F * Math.ulp(coordinate));
     }
 
     private void restituteMovementAfterCollisions(final BoarBlockState state, final boolean xCollision, final boolean zCollision, final Vec3 movement) {

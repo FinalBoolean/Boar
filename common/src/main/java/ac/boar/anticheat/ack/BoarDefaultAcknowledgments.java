@@ -184,7 +184,7 @@ public final class BoarDefaultAcknowledgments {
 
         if (ack.width() != null) {
             player.dimensions = EntityDimensions.fixed(ack.width(), player.dimensions.height()).withEyeHeight(player.dimensions.eyeHeight());
-            player.boundingBox = player.dimensions.getBoxAt(player.position);
+            player.setBoundingBox(player.position);
         }
 
         if (ack.height() != null) {
@@ -197,7 +197,7 @@ public final class BoarDefaultAcknowledgments {
                 eyeHeight = 1.27F;
             }
             player.dimensions = EntityDimensions.fixed(player.dimensions.width(), ack.height()).withEyeHeight(eyeHeight);
-            player.boundingBox = player.dimensions.getBoxAt(player.position);
+            player.setBoundingBox(player.position);
         }
 
         if (ack.scale() != null) {
