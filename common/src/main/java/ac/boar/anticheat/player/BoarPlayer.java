@@ -108,7 +108,7 @@ public final class BoarPlayer extends PlayerData {
     // construction (see BoarPlayerManager#shouldDisableMitigations) and mutable afterwards, so an
     // integration can move a single player between arms at runtime without touching the config.
     @Setter
-    private boolean disableMitigations;
+    private volatile boolean disableMitigations;
 
     public ScheduledFuture<?> future;
 
