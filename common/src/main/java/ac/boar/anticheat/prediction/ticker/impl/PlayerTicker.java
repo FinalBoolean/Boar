@@ -38,7 +38,24 @@ public class PlayerTicker extends LivingTicker {
             player.ticksSinceCanSlowdown = 0;
         }
 
-        if (player.getFlagTracker().has(EntityFlag.USING_ITEM) && !player.getItemUseTracker().isUsingSpear()) {
+        final boolean usingFlag = player.getFlagTracker().has(EntityFlag.USING_ITEM);
+        final boolean trackerHasItem = player.getItemUseTracker().getItem() != null;
+        if (usingFlag != player.prevUsingItemFlag) {
+            player.lastItemUseStateChangeTick = player.tick;
+        }
+        player.prevUsingItemFlag = usingFlag;
+
+        final long sinceChange = player.tick - player.lastItemUseStateChangeTick;
+        boolean applySlowdown = usingFlag && !player.getItemUseTracker().isUsingSpear();
+        final float inputLen = player.input.horizontalLength();
+        final boolean unverifiedUse = usingFlag && !trackerHasItem;
+        if ((sinceChange < 5 || unverifiedUse) && inputLen > 1.0E-4F) {
+            final float mx = player.clientMotion.getX(), my = player.clientMotion.getY();
+            final float clientLen = (float) Math.sqrt(mx * mx + my * my) * 0.98F;
+            applySlowdown = clientLen < inputLen * 0.5F;
+        }
+
+        if (applySlowdown) {
             player.input = player.input.multiply(0.122499995F);
         }
     }

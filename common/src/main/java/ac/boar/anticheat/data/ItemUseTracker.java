@@ -52,7 +52,10 @@ public class ItemUseTracker {
         }
 
         if (this.usedItem == ItemData.AIR || this.item == null) {
-            this.release();
+            return;
+        }
+
+        if (this.player.compensatedInventory.inventoryContainer.getHeldItemCache().isEmpty()) {
             return;
         }
 
@@ -62,6 +65,7 @@ public class ItemUseTracker {
     }
 
     public void release() {
+        this.player.lastItemUseStateChangeTick = this.player.tick;
         this.usedItem = ItemData.AIR;
         this.item = null;
         this.player.sinceTridentUse = 0;
@@ -73,6 +77,7 @@ public class ItemUseTracker {
             return;
         }
 
+        this.player.lastItemUseStateChangeTick = this.player.tick;
         this.usedItem = usedItem;
         this.item = item;
         this.dirtyUsing = DirtyUsing.INVENTORY_TRANSACTION;
@@ -80,7 +85,7 @@ public class ItemUseTracker {
         player.sinceTridentUse = 0;
     }
 
-    private boolean canBeUse(final ItemData usedItem, Item item) {
+    public boolean canBeUse(final ItemData usedItem, Item item) {
         // This way we can support custom item use duration too, also wrap this since I don't trust myself enough.
         try {
             final NbtMap map = usedItem.getDefinition().getComponentData();

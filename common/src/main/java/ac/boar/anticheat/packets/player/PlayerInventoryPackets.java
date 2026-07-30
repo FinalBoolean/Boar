@@ -10,9 +10,11 @@ import ac.boar.anticheat.ack.types.InventorySlotAck;
 import ac.boar.anticheat.ack.types.UpdateTradeAck;
 import ac.boar.anticheat.compensated.CompensatedInventory;
 import ac.boar.anticheat.check.impl.inventory.Inventory;
+import ac.boar.anticheat.data.ItemUseTracker;
 import ac.boar.anticheat.player.BoarPlayer;
 import ac.boar.protocol.api.CloudburstPacketEvent;
 import ac.boar.protocol.api.PacketListener;
+import org.cloudburstmc.protocol.bedrock.data.entity.EntityFlag;
 import org.cloudburstmc.protocol.bedrock.data.inventory.ContainerId;
 import org.cloudburstmc.protocol.bedrock.data.inventory.ContainerType;
 import org.cloudburstmc.protocol.bedrock.packet.*;
@@ -85,6 +87,11 @@ public class PlayerInventoryPackets implements PacketListener {
             }
 
             inventory.heldItemSlot = newSlot;
+
+            if (player.getItemUseTracker().getItem() != null || player.getFlagTracker().has(EntityFlag.USING_ITEM)) {
+                player.getItemUseTracker().release();
+                player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
+            }
         }
     }
 

@@ -105,6 +105,10 @@ public class PlayerData {
     public Vec3 input = Vec3.ZERO;
     public Vec3 unvalidatedTickEnd = Vec3.ZERO;
 
+    public Vector2f clientMotion = Vector2f.ZERO;
+    public boolean prevUsingItemFlag;
+    public long lastItemUseStateChangeTick = Long.MIN_VALUE / 4;
+
     public Vector certainVelocity;
 
     // Attribute related, abilities

@@ -8,6 +8,7 @@ import ac.boar.anticheat.ack.types.UpdateAbilitiesAck;
 import ac.boar.anticheat.ack.types.UpdateAttributesAck;
 import ac.boar.anticheat.compensated.cache.container.ContainerCache;
 import ac.boar.anticheat.compensated.cache.entity.EntityCache;
+import ac.boar.anticheat.data.ItemUseTracker;
 import ac.boar.anticheat.data.input.PredictionData;
 import ac.boar.anticheat.data.inventory.BoarItemStack;
 import ac.boar.anticheat.player.BoarPlayer;
@@ -157,13 +158,16 @@ public class ServerDataPackets implements PacketListener {
             player.getFlagTracker().set(EntityFlag.SPRINTING, packet.getFlags().contains(EntityFlag.SPRINTING));
 
             boolean using = packet.getFlags().contains(EntityFlag.USING_ITEM);
-            if (!using) {
-                // This is a shit solution to prevent player to do no slow using this packet but ehhhh
-                // We wouldn't have to do this if we're handling eating properly
-                player.getEntity().releaseItem();
-            }
+            final boolean staleStop = !using && player.getItemUseTracker().getDirtyUsing() == ItemUseTracker.DirtyUsing.INVENTORY_TRANSACTION;
+            if (!staleStop) {
+                if (!using) {
+                    // This is a shit solution to prevent player to do no slow using this packet but ehhhh
+                    // We wouldn't have to do this if we're handling eating properly
+                    player.getEntity().releaseItem();
+                }
 
-            player.getFlagTracker().set(EntityFlag.USING_ITEM, using);
+                player.getFlagTracker().set(EntityFlag.USING_ITEM, using);
+            }
 
             final ContainerCache cache = player.compensatedInventory.armorContainer;
             player.getFlagTracker().set(EntityFlag.GLIDING, BoarItemStack.of(player.getSession(), cache.get(1).getData()).is(Items.ELYTRA) && packet.getFlags().contains(EntityFlag.GLIDING));

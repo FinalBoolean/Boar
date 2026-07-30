@@ -31,6 +31,7 @@ public final class FlagTracker {
 
     public void set(final BoarPlayer player, final Set<EntityFlag> flags, boolean server) {
         boolean sneaking = this.has(EntityFlag.SNEAKING), swimming = this.has(EntityFlag.SWIMMING);
+        boolean wasUsingFlag = this.has(EntityFlag.USING_ITEM);
 
         this.clear();
         this.flags.addAll(flags);
@@ -42,7 +43,7 @@ public final class FlagTracker {
         }
 
 //        System.out.println("Metadata using: " + flags.contains(EntityFlag.USING_ITEM));
-        boolean oldUsingItem = player.getItemUseTracker().getUsedItem() != ItemData.AIR;
+        boolean oldUsingItem = player.getItemUseTracker().getUsedItem() != ItemData.AIR || wasUsingFlag;
         // Don't update this directly, if player actually start using item they will let us know next tick. If the player has already start using, then nothing changed.
         if (this.has(EntityFlag.USING_ITEM)) {
 //            System.out.println("Wait for next tick: " + oldUsingItem);
@@ -51,6 +52,8 @@ public final class FlagTracker {
                 player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.METADATA);
 //                System.out.println("Dirty using metadata!");
             }
+        } else if (player.getItemUseTracker().getDirtyUsing() == ItemUseTracker.DirtyUsing.INVENTORY_TRANSACTION) {
+            this.set(EntityFlag.USING_ITEM, oldUsingItem);
         } else {
             // If the player send an inventory transaction packet then receive metadata update set using item to false right before next tick, then the
             // START_USING_ITEM should be ignored (bedrock is weird).

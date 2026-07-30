@@ -106,6 +106,7 @@ public class LegacyAuthInputPackets {
 
     public static void processAuthInput(final BoarPlayer player, final PlayerAuthInputPacket packet, boolean processInputData) {
         player.setInputData(packet.getInputData());
+        player.clientMotion = packet.getMotion();
 
         InputUtil.processInput(player, packet);
 
@@ -222,28 +223,37 @@ public class LegacyAuthInputPackets {
                 }
 
                 case START_USING_ITEM -> {
-                    // Seems to be the case, this should only be taken seriously when it's trigger by sever metadata
-                    // or actual item use from inventory transaction packet.
-                    if (player.getItemUseTracker().getDirtyUsing() == ItemUseTracker.DirtyUsing.NONE) {
-                        if (!player.disableMitigations()) {
-                            iterator.remove();
-                        }
-                        return;
-                    }
-
                     final ItemData itemData = player.compensatedInventory.inventoryContainer.getHeldItemData();
                     BoarItemStack itemStack = BoarItemStack.of(player.getSession(), itemData);
 
-                    // The player in fact CAN use an item that is not air even if that item is eg: dirt for 1 tick.
-                    // However, this likely will only happen when flag de-sync.
+                    final ItemUseTracker.DirtyUsing armed = player.getItemUseTracker().getDirtyUsing();
+                    if (armed == ItemUseTracker.DirtyUsing.NONE && player.getFlagTracker().has(EntityFlag.USING_ITEM)) {
+                        // The client sent the flag again while still using an item? Here we'll just keep the current using item state
+                        continue;
+                    }
+
+                    // TODO: Try and debug inventory issues further.
                     if (itemStack.isEmpty()) {
+                        player.getFlagTracker().set(EntityFlag.USING_ITEM, true);
+                        player.lastItemUseStateChangeTick = player.tick;
+                        player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
+                        continue;
+                    }
+
+                    if (armed == ItemUseTracker.DirtyUsing.NONE) {
+                        if (player.getItemUseTracker().canBeUse(itemData, itemStack.item())) {
+                            player.getFlagTracker().set(EntityFlag.USING_ITEM, true);
+                            player.getItemUseTracker().use(itemData, itemStack.item(), true);
+                            player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
+                            continue;
+                        }
+
                         if (!player.disableMitigations()) {
                             iterator.remove();
                         }
-                        return;
+                        continue;
                     }
 
-//                    System.out.println("Start using item: " + itemData);
                     player.getFlagTracker().set(EntityFlag.USING_ITEM, true);
                     player.getItemUseTracker().use(itemData, itemStack.item(), true);
                     player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
@@ -258,7 +268,10 @@ public class LegacyAuthInputPackets {
         }
 
         final ItemUseTracker.DirtyUsing dirtyUsing = player.getItemUseTracker().getDirtyUsing();
-        if (dirtyUsing != ItemUseTracker.DirtyUsing.NONE) {
+        if (dirtyUsing == ItemUseTracker.DirtyUsing.INVENTORY_TRANSACTION && player.getFlagTracker().has(EntityFlag.USING_ITEM)) {
+            // The client sent a new use transaction while still using an item (right-click spam) + server metadata causing some type of flag desync
+            player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
+        } else if (dirtyUsing != ItemUseTracker.DirtyUsing.NONE) {
             // Shit hack, I know I'm too lazy to properly check for when the item is actually usable eg: riptide trident in water.
             // Also, there are bugs in bedrock where the player can still use even tho they're not supposed to so what we get will never
             // be reliable (https://bugs.mojang.com/browse/MCPE/issues/MCPE-178647), call me out for being lazy but blame bugrock.
