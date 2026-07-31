@@ -19,6 +19,7 @@ import ac.boar.anticheat.ack.types.HotbarSlotAck;
 import ac.boar.anticheat.ack.types.InventoryContentAck;
 import ac.boar.anticheat.ack.types.InventorySlotAck;
 import ac.boar.anticheat.ack.types.MobEffectAck;
+import ac.boar.anticheat.ack.types.MovementCorrectionAck;
 import ac.boar.anticheat.ack.types.PlayerMetadataAck;
 import ac.boar.anticheat.ack.types.TeleportAcceptAck;
 import ac.boar.anticheat.ack.types.UpdateAbilitiesAck;
@@ -97,6 +98,7 @@ public final class BoarDefaultAcknowledgments {
         registry.register(VehicleSetAck.class, BoarDefaultAcknowledgments::handleVehicleSet);
 
         registry.register(TeleportAcceptAck.class, BoarDefaultAcknowledgments::handleTeleportAccept);
+        registry.register(MovementCorrectionAck.class, BoarDefaultAcknowledgments::handleMovementCorrection);
     }
 
     private static void handleChunkRadiusUpdate(BoarPlayer player, ChunkRadiusUpdateAck ack) {
@@ -152,7 +154,7 @@ public final class BoarDefaultAcknowledgments {
     private static void handleEntityInterpolate(BoarPlayer player, EntityInterpolateAck ack) {
         final EntityCache entity = player.compensatedWorld.getEntity(ack.runtimeEntityId());
         if (entity != null) {
-            entity.interpolate(ack.position(), ack.lerp());
+            entity.interpolate(ack.posX(), ack.posY(), ack.posZ(), ack.lerp());
         }
     }
 
@@ -182,7 +184,7 @@ public final class BoarDefaultAcknowledgments {
 
         if (ack.width() != null) {
             player.dimensions = EntityDimensions.fixed(ack.width(), player.dimensions.height()).withEyeHeight(player.dimensions.eyeHeight());
-            player.boundingBox = player.dimensions.getBoxAt(player.position);
+            player.setBoundingBox(player.position);
         }
 
         if (ack.height() != null) {
@@ -195,7 +197,7 @@ public final class BoarDefaultAcknowledgments {
                 eyeHeight = 1.27F;
             }
             player.dimensions = EntityDimensions.fixed(player.dimensions.width(), ack.height()).withEyeHeight(eyeHeight);
-            player.boundingBox = player.dimensions.getBoxAt(player.position);
+            player.setBoundingBox(player.position);
         }
 
         if (ack.scale() != null) {
@@ -374,5 +376,9 @@ public final class BoarDefaultAcknowledgments {
 
     private static void handleTeleportAccept(BoarPlayer player, TeleportAcceptAck ack) {
         ack.data().accept();
+    }
+
+    private static void handleMovementCorrection(BoarPlayer player, MovementCorrectionAck ack) {
+        player.getTeleportUtil().removePendingCorrection();
     }
 }

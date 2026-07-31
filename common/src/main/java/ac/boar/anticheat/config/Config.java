@@ -27,13 +27,16 @@ public final class Config {
     private boolean forceServerAuthoritativeVehicles = true;
     @JsonProperty("max-tolerance-compensated-reach")
     @JsonSetter(nulls = Nulls.SKIP)
-    private float toleranceReach = 3.005F;
+    private float toleranceReach = 2.91F;
     @JsonProperty("differ-till-alert")
     @JsonSetter(nulls = Nulls.SKIP)
     private float alertThreshold = 0.0F;
     @JsonProperty("disabled-checks")
     @JsonSetter(nulls = Nulls.SKIP)
     private List<String> disabledChecks = new ArrayList<>();
+    @JsonProperty("disable-mitigations")
+    @JsonSetter(nulls = Nulls.SKIP)
+    private boolean disableMitigations;
     @JsonProperty("ignore-ghost-block")
     @JsonSetter(nulls = Nulls.SKIP)
     private boolean ignoreGhostBlock;
@@ -68,7 +71,7 @@ public final class Config {
     }
 
     public float toleranceReach() {
-        return Math.max(3.0001F, toleranceReach);
+        return Math.max(2.9F, toleranceReach);
     }
 
     public float alertThreshold() {
@@ -77,6 +80,10 @@ public final class Config {
 
     public List<String> disabledChecks() {
         return disabledChecks;
+    }
+
+    public boolean disableMitigations() {
+        return disableMitigations;
     }
 
     public boolean ignoreGhostBlock() {

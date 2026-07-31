@@ -35,6 +35,8 @@ import ac.boar.mappings.block.BlockMappings;
 import ac.boar.mappings.entity.Entity;
 import ac.boar.mappings.entity.EntityDefinition;
 import ac.boar.mappings.entity.EntityDefinitions;
+import ac.boar.protocol.PacketInjector;
+import io.netty.util.ReferenceCountUtil;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.SneakyThrows;
@@ -45,6 +47,7 @@ import ac.boar.protocol.BoarConnection;
 import org.cloudburstmc.protocol.bedrock.data.Ability;
 import org.cloudburstmc.protocol.bedrock.data.PlayerAuthInputData;
 import org.cloudburstmc.protocol.bedrock.data.entity.EntityFlag;
+import org.cloudburstmc.protocol.bedrock.packet.BedrockPacket;
 
 import java.util.Map;
 import java.util.UUID;
@@ -80,6 +83,12 @@ public final class BoarPlayer extends PlayerData {
     @Setter
     private BoarAcknowledgmentTransport ackTransport;
 
+    // Platform-provided replay hook. The default platform installs BoarHandlerAdaptor here
+    // (see BoarPlayerManager#installHandlers); platforms that bridge their own packet-event
+    // stream must install their own injector, or injectClientPacket drops every packet.
+    @Setter
+    private PacketInjector packetInjector;
+
     // Lag compensation
     public final CompensatedWorldImpl compensatedWorld = new CompensatedWorldImpl(this);
     public final CompensatedInventory compensatedInventory = new CompensatedInventory(this);
@@ -94,17 +103,26 @@ public final class BoarPlayer extends PlayerData {
     @Getter
     private final Map<UUID, MessageRecipient> trackedDebugPlayers = new ConcurrentHashMap<>();
 
+    // Whether mitigations are suppressed for this player: checks still run and violations are still
+    // reported, but nothing is cancelled, corrected, rewound or kicked. Seeded per-player at
+    // construction (see BoarPlayerManager#shouldDisableMitigations) and mutable afterwards, so an
+    // integration can move a single player between arms at runtime without touching the config.
+    @Setter
+    private volatile boolean disableMitigations;
+
     public ScheduledFuture<?> future;
 
     @SneakyThrows
     public BoarPlayer(NetworkSession session, BoarConnection connection, Entity entity,
                       BlockMappingInfo mappingInfo, WorldAccessor worldAccessor, EntityAccessor entityAccessor,
-                      InventoryAccessor inventoryAccessor, Map<String, AttributeInstance> defaultAttributes) {
+                      InventoryAccessor inventoryAccessor, Map<String, AttributeInstance> defaultAttributes,
+                      boolean disableMitigations) {
         super(mappingInfo);
 
         this.session = session;
         this.connection = connection;
         this.entity = entity;
+        this.disableMitigations = disableMitigations;
 
         this.worldAccessor = worldAccessor;
         this.entityAccessor = entityAccessor;
@@ -125,7 +143,7 @@ public final class BoarPlayer extends PlayerData {
         }
 
         if (System.currentTimeMillis() - this.getLatencyUtil().prevAcceptedTime > Boar.getConfig().maxLatencyWait()) {
-            kick("Timed out!");
+            disconnect("Timed out!");
         }
     }
 
@@ -156,6 +174,24 @@ public final class BoarPlayer extends PlayerData {
         this.ackTransport.attach(ack);
     }
 
+    /**
+     * Replay a Bedrock packet inbound as if the client had just sent it. Used to forward
+     * an attack (or any other inbound packet) that was previously cancelled by a check.
+     * The synthetic packet skips Boar's listener chain on its way downstream, so the
+     * caller is responsible for any prior listener-side processing.
+     */
+    public void injectClientPacket(BedrockPacket packet) {
+        if (this.packetInjector == null) {
+            // A missing injector is a platform wiring bug — the packet a check approved for
+            // replay is lost. Log it so the drop is visible, and release the caller's reference.
+            Boar.debug("[inject] dropped " + packet.getClass().getSimpleName()
+                    + " — no packet injector installed", Boar.DebugMessage.WARNING);
+            ReferenceCountUtil.safeRelease(packet);
+            return;
+        }
+        this.packetInjector.injectClientPacket(packet);
+    }
+
     public boolean isMovementExempted() {
         try { // Ye, well whatever.
             if (this.session.hasPermission("boar.exempt")) {
@@ -166,7 +202,19 @@ public final class BoarPlayer extends PlayerData {
         return this.abilities.contains(Ability.MAY_FLY) || this.getFlagTracker().isFlying() || this.getFlagTracker().isWasFlying();
     }
 
+    public boolean disableMitigations() {
+        return this.disableMitigations;
+    }
+
     public void kick(String reason) {
+        if (this.disableMitigations) {
+            return;
+        }
+
+        disconnect(reason);
+    }
+
+    private void disconnect(String reason) {
         this.session.disconnect(Boar.getInstance().getAlertManager().getPrefix() + " " + reason);
     }
 

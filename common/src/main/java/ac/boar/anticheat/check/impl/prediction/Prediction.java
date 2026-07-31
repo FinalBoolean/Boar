@@ -37,16 +37,20 @@ public class Prediction extends BaseCheck implements OffsetHandlerCheck {
             return;
         }
 
-        Boar.debug("[movement-debug] prediction offset tick=" + player.tick + " offset=" + offset + " max=" + player.getMaxOffset() + " alert=" + Boar.getConfig().alertThreshold() + " type=" + player.bestPossibility.getType() + " predictedPos=" + player.position + " actualPos=" + player.unvalidatedPosition + " predictedDelta=" + player.velocity + " actualDelta=" + player.unvalidatedTickEnd, Boar.DebugMessage.WARNING);
-
-        if (!shouldDoFail() || offset < Boar.getConfig().alertThreshold()) {
-            Boar.debug("[movement-debug] rewind reason=prediction-soft tick=" + player.tick + " offset=" + offset, Boar.DebugMessage.WARNING);
-            player.getTeleportUtil().rewind(player.tick);
+        if (!this.shouldDoFail()) {
             return;
         }
 
-        Boar.debug("[movement-debug] rewind reason=prediction-fail tick=" + player.tick + " offset=" + offset, Boar.DebugMessage.WARNING);
-        player.getTeleportUtil().rewind(player.tick);
+        Boar.debug("[movement-debug] prediction offset tick=" + player.tick + " offset=" + offset + " max=" + player.getMaxOffset() + " alert=" + Boar.getConfig().alertThreshold() + " type=" + player.bestPossibility.getType() + " predictedPos=" + player.position + " actualPos=" + player.unvalidatedPosition + " predictedDelta=" + player.velocity + " actualDelta=" + player.unvalidatedTickEnd, Boar.DebugMessage.WARNING);
+
+        if (offset < Boar.getConfig().alertThreshold() && !player.disableMitigations()) {
+            Boar.debug("[movement-debug] correction reason=prediction-soft tick=" + player.tick + " offset=" + offset, Boar.DebugMessage.WARNING);
+            player.getTeleportUtil().correct();
+            return;
+        }
+
+        Boar.debug("[movement-debug] correction reason=prediction-fail tick=" + player.tick + " offset=" + offset, Boar.DebugMessage.WARNING);
+        player.getTeleportUtil().correct();
 
         boolean claimedHorizontal = player.getInputData().contains(PlayerAuthInputData.HORIZONTAL_COLLISION);
         boolean claimedVertical = player.getInputData().contains(PlayerAuthInputData.VERTICAL_COLLISION);
@@ -80,7 +84,21 @@ public class Prediction extends BaseCheck implements OffsetHandlerCheck {
     }
 
     public boolean shouldDoFail() {
-        return player.tickSinceBlockResync <= 0 && !player.insideUnloadedChunk && !player.getTeleportUtil().isTeleporting() && player.sinceLoadingScreen > 5 && player.compensatedWorld.isChunkLoadedAt(player.position.x, player.position.z);
+        return this.canFlagMovement();
+    }
+
+    private boolean canFlagMovement() {
+        return player.tickSinceBlockResync <= 0
+                && !player.insideUnloadedChunk
+                && !player.getTeleportUtil().isTeleporting()
+                && !player.getTeleportUtil().hasPendingCorrection()
+                && !player.getTeleportUtil().isCorrectionCooldown()
+                && !player.isMovementExempted()
+                && !player.inLoadingScreen
+                && player.sinceLoadingScreen > 5
+                && player.compensatedWorld.isChunkLoadedAt(player.position.x, player.position.z)
+                && player.compensatedWorld.isChunkLoadedAt(
+                        player.unvalidatedPosition.x, player.unvalidatedPosition.z);
     }
 
     public void fail(String name, String verbose) {

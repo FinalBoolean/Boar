@@ -22,7 +22,7 @@ player-position-acceptance-threshold: 1.0E-4
 force-server-authoritative-vehicles: true
 
 # This is the max reach that Boar going to tolerance before flagging, it does account for lag so no worry :)
-max-tolerance-compensated-reach: 3.005
+max-tolerance-compensated-reach: 2.91
 
 # How many discrepancies between the Client and Server Player position needed to be before the anticheat send alert message
 # NOTE: This is NOT tolerance of discrepancies (that's player-position-acceptance-threshold), this will still do silent
@@ -33,6 +33,13 @@ differ-till-alert: 0.0
 # Checks that you want Boar to disable.
 # Check name should be in format "Name-Type" and if there is no type then "Name", ex: Reach-A (don't actually disable reach check lol).
 disabled-checks: []
+
+# Disable every anti-cheat mitigation while continuing to run checks and report violations.
+# This allows detected actions to reach the server without Boar cancelling packets, correcting blocks, rewinding movement, or kicking players.
+# This is the default each player starts with; mitigations are tracked per-player, so an integration can override
+# BoarPlayerManager#shouldDisableMitigations to split players into arms (ex: A/B testing corrections) or flip a single
+# player at runtime with BoarPlayer#setDisableMitigations.
+disable-mitigations: false
 
 # Normally Boar will account for lag, that also including block, if on the server side the block below player is Air but if
 # on the client side, it's an actual block, then Boar will account for this. However, with this enable, Boar will forcefully

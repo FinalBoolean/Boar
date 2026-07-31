@@ -11,6 +11,10 @@ import org.cloudburstmc.protocol.bedrock.packet.UpdateBlockPacket;
 public final class BlockUtil {
 
     public static void restoreCorrectBlock(BoarPlayer player, Vector3i vector, BoarBlockState blockState) {
+        if (player.disableMitigations()) {
+            return;
+        }
+
         BlockDefinition bedrockBlock = blockState.definition(player);
 
         UpdateBlockPacket updateBlockPacket = new UpdateBlockPacket();

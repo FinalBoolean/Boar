@@ -1,12 +1,9 @@
 package ac.boar.anticheat.teleport;
 
 import ac.boar.anticheat.Boar;
+import ac.boar.anticheat.ack.types.MovementCorrectionAck;
 import ac.boar.anticheat.ack.types.TeleportAcceptAck;
-import ac.boar.anticheat.data.input.PredictionData;
-import ac.boar.anticheat.data.input.TickData;
 import ac.boar.anticheat.player.BoarPlayer;
-import ac.boar.anticheat.teleport.data.RewindData;
-import ac.boar.anticheat.teleport.data.RewindHistory;
 import ac.boar.anticheat.teleport.data.TeleportData;
 import ac.boar.anticheat.util.math.Vec3;
 import lombok.Getter;
@@ -16,18 +13,18 @@ import org.cloudburstmc.protocol.bedrock.data.PredictionType;
 import org.cloudburstmc.protocol.bedrock.packet.CorrectPlayerMovePredictionPacket;
 import org.cloudburstmc.protocol.bedrock.packet.MovePlayerPacket;
 
-import java.util.Iterator;
-import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentSkipListMap;
 
 @RequiredArgsConstructor
 public class TeleportUtil {
     private final BoarPlayer player;
 
     @Getter
-    private Vec3 lastKnowValid = Vec3.ZERO;
+    private Vec3 lastKnownValid = Vec3.ZERO;
+    private int pendingCorrections;
+    @Getter
+    private boolean correctionCooldown;
 
     @Getter
     private final Queue<TeleportData> queuedTeleports = new ConcurrentLinkedQueue<>();
@@ -47,7 +44,7 @@ public class TeleportUtil {
         packet.setTeleportationCause(MovePlayerPacket.TeleportationCause.BEHAVIOR);
 
         this.player.getConnection().sendPacket(packet);
-        Boar.debug("[movement-debug] sent teleport pos=" + vec3 + " lastKnown=" + this.lastKnowValid, Boar.DebugMessage.WARNING);
+        Boar.debug("[movement-debug] sent teleport pos=" + vec3 + " lastKnown=" + this.lastKnownValid, Boar.DebugMessage.WARNING);
     }
 
     public void queue(TeleportData data) {
@@ -55,62 +52,74 @@ public class TeleportUtil {
         player.sendLatencyStack(new TeleportAcceptAck(data));
     }
 
+    /**
+     * Resets all teleport state to a position that the server already established.
+     */
+    public void reset(Vec3 position) {
+        this.queuedTeleports.clear();
+        this.lastKnownValid = position.clone();
+        this.pendingCorrections = 0;
+        this.correctionCooldown = false;
+    }
+
     public boolean isTeleporting() {
         return !this.queuedTeleports.isEmpty();
     }
 
-    public boolean isHardTeleporting() {
-        return !this.queuedTeleports.stream().filter(teleport -> !(teleport instanceof RewindData)).toList().isEmpty();
+    public boolean hasPendingCorrection() {
+        return this.pendingCorrections > 0;
     }
 
-    // Rewind
-    @Getter
-    private final Map<Long, TickData> authInputHistory = new ConcurrentSkipListMap<>();
-    private final Map<Long, RewindHistory> rewindHistory = new ConcurrentSkipListMap<>();
-
-    public void rewind(long tick) {
-        this.rewind(this.rewindHistory.getOrDefault(tick, new RewindHistory(player.tick, this.lastKnowValid, player.predictionResult)));
+    public void addPendingCorrection() {
+        this.pendingCorrections++;
     }
 
-    public void rewind(final RewindHistory rewind) {
-        if (this.isTeleporting()) {
-            Boar.debug("[movement-debug] skipped rewind reason=already-teleporting queued=" + this.queuedTeleports.size() + " tick=" + rewind.tick(), Boar.DebugMessage.WARNING);
+    public void removePendingCorrection() {
+        if (this.pendingCorrections > 0) {
+            this.pendingCorrections--;
+        }
+    }
+
+    public void updateLastKnownValid(Vec3 position) {
+        this.lastKnownValid = position.clone();
+    }
+
+    public void setCorrectionCooldown(boolean correctionCooldown) {
+        this.correctionCooldown = correctionCooldown;
+    }
+
+    public void correct() {
+        if (player.disableMitigations()) {
             return;
         }
 
-        final PredictionData data = rewind.data();
+        if (this.isTeleporting()) {
+            Boar.debug("[movement-debug] skipped correction reason=already-teleporting queued=" + this.queuedTeleports.size() + " tick=" + player.tick, Boar.DebugMessage.WARNING);
+            return;
+        }
 
-        final boolean onGround = data.before().y != data.after().y && data.before().y < 0;
+        if (this.hasPendingCorrection()) {
+            Boar.debug("[movement-debug] skipped correction reason=already-correcting pending=" + this.pendingCorrections + " tick=" + player.tick, Boar.DebugMessage.WARNING);
+            return;
+        }
 
-        final long tick = rewind.tick();
+        if (player.isMovementExempted()) {
+            Boar.debug("[movement-debug] skipped correction reason=movement-exempt tick=" + player.tick, Boar.DebugMessage.WARNING);
+            return;
+        }
+
         final CorrectPlayerMovePredictionPacket packet = new CorrectPlayerMovePredictionPacket();
-        packet.setPosition(rewind.position().add(data.after()).toVector3f());
-        packet.setOnGround(onGround);
-        packet.setTick(tick);
-        packet.setDelta(data.tickEnd().toVector3f());
+        packet.setPosition(player.position.add(0, player.getYOffset(), 0).toVector3f());
+        packet.setOnGround(player.onGround);
+        packet.setTick(player.tick);
+        packet.setDelta(player.velocity.toVector3f());
         packet.setVehicleRotation(Vector2f.ZERO);
         packet.setPredictionType(player.vehicleData != null ? PredictionType.VEHICLE : PredictionType.PLAYER);
 
+        this.addPendingCorrection();
+        this.correctionCooldown = true;
+        this.player.sendLatencyStack(new MovementCorrectionAck());
         this.player.getConnection().sendPacketImmediately(packet);
-        Boar.debug("sent rewind tick=" + tick + " pos=" + packet.getPosition() + " delta=" + packet.getDelta() + " onGround=" + onGround, Boar.DebugMessage.WARNING);
-    }
-
-    public void cacheRewindHistory(long tick, Vec3 position) {
-        this.rewindHistory.put(tick, new RewindHistory(tick, this.lastKnowValid.clone(), player.predictionResult));
-        this.lastKnowValid = position;
-    }
-
-    public void pollRewindHistory() {
-        final Iterator<Map.Entry<Long, RewindHistory>> iterator = this.rewindHistory.entrySet().iterator();
-        while (iterator.hasNext() && this.rewindHistory.size() > Boar.getConfig().rewindHistory()) {
-            iterator.next();
-            iterator.remove();
-        }
-
-        final Iterator<Map.Entry<Long, TickData>> iterator1 = this.authInputHistory.entrySet().iterator();
-        while (iterator1.hasNext() && this.authInputHistory.size() > Boar.getConfig().rewindHistory()) {
-            iterator1.next();
-            iterator1.remove();
-        }
+        Boar.debug("[movement-debug] sent correction tick=" + player.tick + " pos=" + packet.getPosition() + " delta=" + packet.getDelta() + " onGround=" + player.onGround, Boar.DebugMessage.WARNING);
     }
 }

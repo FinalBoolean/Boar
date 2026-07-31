@@ -7,6 +7,7 @@ import ac.boar.anticheat.ack.types.ChunkLoadAck;
 import ac.boar.anticheat.ack.types.ChunkRadiusUpdateAck;
 import ac.boar.anticheat.ack.types.SubChunkLoadAck;
 import ac.boar.anticheat.compensated.world.base.CompensatedWorld;
+import ac.boar.anticheat.compensated.world.cache.ChunkSectionCache;
 import ac.boar.anticheat.player.BoarPlayer;
 import ac.boar.anticheat.util.Dimension;
 import ac.boar.anticheat.util.DimensionUtil;
@@ -63,15 +64,24 @@ public class ServerChunkPackets implements PacketListener {
 
             final Dimension dimension = DimensionUtil.dimensionFromId(packet.getDimension());
             final BoarChunkSection[] sections = new BoarChunkSection[dimension.height() >> 4];
+            final int airId = player.mappingInfo.airId();
+            final ChunkSectionCache cache = Boar.getInstance().getChunkCache();
 
             final ByteBuf buf = packet.getData().retainedDuplicate();
             try {
                 for (int i = 0; i < subChunksCount; i++) {
-                    final ChunkDecoder.DecodedSubChunk decoded = ChunkDecoder.readSubChunk(buf, player.mappingInfo.airId(), i, dimension.minY());
-                    if (decoded.sectionY() < 0 || decoded.sectionY() >= sections.length) {
+                    final int start = buf.readerIndex();
+                    // Measure the byte range of the sub-chunk without a decode. On a cache hit, no
+                    // decode occurs. On a cache miss, the decoder below reads this slice.
+                    final int sectionY = ChunkDecoder.skipSubChunk(buf, i, dimension.minY());
+                    final int end = buf.readerIndex();
+                    if (sectionY < 0 || sectionY >= sections.length) {
                         continue;
                     }
-                    sections[decoded.sectionY()] = decoded.section();
+                    final int index = i;
+                    final ByteBuf slice = buf.slice(start, end - start);
+                    sections[sectionY] = cache.getOrDecode(slice, airId,
+                            () -> ChunkDecoder.readSubChunk(slice, airId, index, dimension.minY()).section());
                 }
 
                 // Ignore the rest, I only need the chunk data.
@@ -108,13 +118,18 @@ public class ServerChunkPackets implements PacketListener {
 
                 BoarChunkSection section = null;
                 if (result == SubChunkRequestResult.SUCCESS && entry.getData() != null) {
-                    final ByteBuf buf = entry.getData().retainedDuplicate();
-                    try {
-                        section = ChunkDecoder.readSubChunk(buf, player.mappingInfo.airId(), sectionY, dimension.minY()).section();
-                    } catch (Exception ignored) {
-                    } finally {
-                        buf.release();
-                    }
+                    final ByteBuf data = entry.getData();
+                    final int airId = player.mappingInfo.airId();
+                    section = Boar.getInstance().getChunkCache().getOrDecode(data, airId, () -> {
+                        final ByteBuf dup = data.retainedDuplicate();
+                        try {
+                            return ChunkDecoder.readSubChunk(dup, airId, sectionY, dimension.minY()).section();
+                        } catch (Exception ex) {
+                            return null;
+                        } finally {
+                            dup.release();
+                        }
+                    });
                 }
 
                 player.queueAcknowledgment(new SubChunkLoadAck(chunkX, chunkZ, sectionY, dimension, section));

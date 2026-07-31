@@ -24,6 +24,7 @@ import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.protocol.bedrock.data.Ability;
 import org.cloudburstmc.protocol.bedrock.data.GameType;
 import org.cloudburstmc.protocol.bedrock.data.InputMode;
+import org.cloudburstmc.protocol.bedrock.data.InputInteractionModel;
 import org.cloudburstmc.protocol.bedrock.data.PlayerAuthInputData;
 import org.cloudburstmc.protocol.bedrock.data.attribute.AttributeModifierData;
 import org.cloudburstmc.protocol.bedrock.data.attribute.AttributeOperation;
@@ -39,8 +40,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @RequiredArgsConstructor
 public class PlayerData {
-    private final static AttributeModifierData SPRINTING_SPEED_BOOST = new AttributeModifierData("D208FC00-42AA-4AAD-9276-D5446530DE43",
-            "Sprinting speed boost",
+    public final static AttributeModifierData SPRINTING_SPEED_BOOST = new AttributeModifierData("D208FC00-42AA-4AAD-9276-D5446530DE43",
+            "Sprinting speed boost - BOAR",
             0.3F, AttributeOperation.MULTIPLY_TOTAL, 2, false);
 
     public final static float JUMP_HEIGHT = 0.42F;
@@ -65,11 +66,14 @@ public class PlayerData {
 
     public GameType gameType = GameType.DEFAULT;
     public InputMode inputMode = InputMode.UNDEFINED;
+    public InputInteractionModel interactionModel = InputInteractionModel.TOUCH;
 
     // Position, rotation, other.
     public float yaw, pitch, prevYaw, prevPitch;
     public Vec3 unvalidatedPosition = Vec3.ZERO, prevUnvalidatedPosition = Vec3.ZERO;
-    public Vector2f interactRotation = Vector2f.ZERO;
+
+    public Vector2f interactRotation = Vector2f.ZERO, prevInteractRotation = Vector2f.ZERO;
+    public boolean prevInteractRotUnchanged = false;
 
     public Vec3 position = Vec3.ZERO, prevPosition = Vec3.ZERO;
     public Vector3f rotation = Vector3f.ZERO;
@@ -100,6 +104,10 @@ public class PlayerData {
     // Movement related, (movement input, player EOT, ...)
     public Vec3 input = Vec3.ZERO;
     public Vec3 unvalidatedTickEnd = Vec3.ZERO;
+
+    public Vector2f clientMotion = Vector2f.ZERO;
+    public boolean prevUsingItemFlag;
+    public long lastItemUseStateChangeTick = Long.MIN_VALUE / 4;
 
     public Vector certainVelocity;
 
@@ -154,6 +162,7 @@ public class PlayerData {
     public boolean hasDepthStrider;
     public boolean touchingWater;
     public boolean horizontalCollision, verticalCollision;
+    public boolean stuckInCollider, penetratedLastFrame;
     public boolean soulSandBelow;
 
     public boolean nearBamboo;
@@ -217,7 +226,7 @@ public class PlayerData {
 
     public final void setPos(Vec3 vec3, boolean prev) {
         if (prev) {
-            this.prevPosition = this.position;
+            this.prevPosition = this.position.clone();
         }
 
         this.position = vec3;

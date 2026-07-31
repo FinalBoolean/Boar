@@ -30,7 +30,13 @@ public class LegacyAuthInputPackets {
 
     public static void doPostPrediction(final BoarPlayer player, final PlayerAuthInputPacket packet) {
         player.postTick();
-        player.getTeleportUtil().cacheRewindHistory(player.tick, player.position.up(player.getYOffset()));
+
+        if (player.getTeleportUtil().isTeleporting() || player.insideUnloadedChunk) {
+            correctInputData(player, packet);
+            return;
+        }
+
+        player.getTeleportUtil().updateLastKnownValid(player.position.up(player.getYOffset()));
 
         final UncertainRunner uncertainRunner = new UncertainRunner(player);
 
@@ -49,21 +55,35 @@ public class LegacyAuthInputPackets {
             }
         }
 
-        // Have to do this due to loss precision, especially elytra!
-        if (player.velocity.distanceTo(player.unvalidatedTickEnd) - extraOffset < player.getMaxOffset()) {
+        if (player.disableMitigations()) {
             player.velocity = player.unvalidatedTickEnd.clone();
-        }
-        correctInputData(player, packet);
-
-        if (offset < player.getMaxOffset()) {
+            player.lastTickFinalVelocity = player.unvalidatedTickEnd.clone();
             player.setPos(player.unvalidatedPosition.clone(), false);
+        } else {
+            // Keep the predicted movement during a pending correction or its cooldown tick.
+            final boolean hasPendingCorrection = player.getTeleportUtil().hasPendingCorrection();
+            final boolean inCorrectionCooldown = player.getTeleportUtil().isCorrectionCooldown();
+            final boolean canAcceptClient = !hasPendingCorrection && !inCorrectionCooldown;
+
+            // Have to do this due to loss precision, especially elytra!
+            if (canAcceptClient && player.velocity.distanceTo(player.unvalidatedTickEnd) - extraOffset < player.getMaxOffset()) {
+                player.velocity = player.unvalidatedTickEnd.clone();
+            }
+
+            if (canAcceptClient && offset < player.getMaxOffset()) {
+                player.setPos(player.unvalidatedPosition.clone(), false);
+            }
+
+            if (!hasPendingCorrection && inCorrectionCooldown) {
+                player.getTeleportUtil().setCorrectionCooldown(false);
+            }
         }
 
-        player.prevPosition = player.position;
+        correctInputData(player, packet);
     }
 
     public static void correctInputData(final BoarPlayer player, final PlayerAuthInputPacket packet) {
-        if (player.isMovementExempted()) {
+        if (player.isMovementExempted() || player.disableMitigations()) {
             return;
         }
 
@@ -86,6 +106,7 @@ public class LegacyAuthInputPackets {
 
     public static void processAuthInput(final BoarPlayer player, final PlayerAuthInputPacket packet, boolean processInputData) {
         player.setInputData(packet.getInputData());
+        player.clientMotion = packet.getMotion();
 
         InputUtil.processInput(player, packet);
 
@@ -95,6 +116,9 @@ public class LegacyAuthInputPackets {
         player.pitch = packet.getRotation().getX();
 
         player.rotation = packet.getRotation();
+
+        player.prevInteractRotUnchanged = player.prevInteractRotation.equals(player.interactRotation);
+        player.prevInteractRotation = player.interactRotation.clone();
         player.interactRotation = packet.getInteractRotation().clone();
 
         player.inputMode = packet.getInputMode();
@@ -107,7 +131,9 @@ public class LegacyAuthInputPackets {
                 player.getFlagTracker().set(EntityFlag.SPRINTING, false);
 
                 // Tell geyser that the player "want" to stop sprinting.
-                packet.getInputData().add(PlayerAuthInputData.STOP_SPRINTING);
+                if (!player.disableMitigations()) {
+                    packet.getInputData().add(PlayerAuthInputData.STOP_SPRINTING);
+                }
             }
         }
     }
@@ -147,7 +173,7 @@ public class LegacyAuthInputPackets {
 
                     // Prevent player from spoofing elytra gliding, could false, considering that the compensated inventory is a bit half-baked but should works in most case.
                     player.getFlagTracker().set(EntityFlag.GLIDING, BoarItemStack.of(player.getSession(), cache.get(1).getData()).is(Items.ELYTRA));
-                    if (!player.getFlagTracker().has(EntityFlag.GLIDING)) {
+                    if (!player.getFlagTracker().has(EntityFlag.GLIDING) && !player.disableMitigations()) {
                         iterator.remove();
                     }
                 }
@@ -159,7 +185,7 @@ public class LegacyAuthInputPackets {
 
                     // Don't let player send an START_SPRINTING to force server to send back a sprinting attribute or allow the
                     // client to trick the server into letting it get sprinting speed while not moving forward.
-                    if (!forwardMovement) {
+                    if (!forwardMovement && !player.disableMitigations()) {
                         iterator.remove();
                     }
                 }
@@ -172,14 +198,14 @@ public class LegacyAuthInputPackets {
                 case START_SNEAKING ->  {
                     if (!useRawSneakState) {
                         player.getFlagTracker().set(EntityFlag.SNEAKING, true);
-                    } else if (!player.getInputData().contains(PlayerAuthInputData.SNEAK_CURRENT_RAW)) {
+                    } else if (!player.getInputData().contains(PlayerAuthInputData.SNEAK_CURRENT_RAW) && !player.disableMitigations()) {
                         iterator.remove();
                     }
                 }
                 case STOP_SNEAKING -> {
                     if (!useRawSneakState) {
                         player.getFlagTracker().set(EntityFlag.SNEAKING, false);
-                    } else if (player.getInputData().contains(PlayerAuthInputData.SNEAK_CURRENT_RAW)) {
+                    } else if (player.getInputData().contains(PlayerAuthInputData.SNEAK_CURRENT_RAW) && !player.disableMitigations()) {
                         iterator.remove();
                     }
                 }
@@ -191,30 +217,43 @@ public class LegacyAuthInputPackets {
                     if (player.dirtySpinStop) {
                         player.stopRiptide();
                         player.velocity = player.velocity.multiply(-0.2F);
-                    } else {
+                    } else if (!player.disableMitigations()) {
                         iterator.remove();
                     }
                 }
 
                 case START_USING_ITEM -> {
-                    // Seems to be the case, this should only be taken seriously when it's trigger by sever metadata
-                    // or actual item use from inventory transaction packet.
-                    if (player.getItemUseTracker().getDirtyUsing() == ItemUseTracker.DirtyUsing.NONE) {
-                        iterator.remove();
-                        return;
-                    }
-
                     final ItemData itemData = player.compensatedInventory.inventoryContainer.getHeldItemData();
                     BoarItemStack itemStack = BoarItemStack.of(player.getSession(), itemData);
 
-                    // The player in fact CAN use an item that is not air even if that item is eg: dirt for 1 tick.
-                    // However, this likely will only happen when flag de-sync.
-                    if (itemStack.isEmpty()) {
-                        iterator.remove();
-                        return;
+                    final ItemUseTracker.DirtyUsing armed = player.getItemUseTracker().getDirtyUsing();
+                    if (armed == ItemUseTracker.DirtyUsing.NONE && player.getFlagTracker().has(EntityFlag.USING_ITEM)) {
+                        // The client sent the flag again while still using an item? Here we'll just keep the current using item state
+                        continue;
                     }
 
-//                    System.out.println("Start using item: " + itemData);
+                    // TODO: Try and debug inventory issues further.
+                    if (itemStack.isEmpty()) {
+                        player.getFlagTracker().set(EntityFlag.USING_ITEM, true);
+                        player.lastItemUseStateChangeTick = player.tick;
+                        player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
+                        continue;
+                    }
+
+                    if (armed == ItemUseTracker.DirtyUsing.NONE) {
+                        if (player.getItemUseTracker().canBeUse(itemData, itemStack.item())) {
+                            player.getFlagTracker().set(EntityFlag.USING_ITEM, true);
+                            player.getItemUseTracker().use(itemData, itemStack.item(), true);
+                            player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
+                            continue;
+                        }
+
+                        if (!player.disableMitigations()) {
+                            iterator.remove();
+                        }
+                        continue;
+                    }
+
                     player.getFlagTracker().set(EntityFlag.USING_ITEM, true);
                     player.getItemUseTracker().use(itemData, itemStack.item(), true);
                     player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
@@ -229,7 +268,10 @@ public class LegacyAuthInputPackets {
         }
 
         final ItemUseTracker.DirtyUsing dirtyUsing = player.getItemUseTracker().getDirtyUsing();
-        if (dirtyUsing != ItemUseTracker.DirtyUsing.NONE) {
+        if (dirtyUsing == ItemUseTracker.DirtyUsing.INVENTORY_TRANSACTION && player.getFlagTracker().has(EntityFlag.USING_ITEM)) {
+            // The client sent a new use transaction while still using an item (right-click spam) + server metadata causing some type of flag desync
+            player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
+        } else if (dirtyUsing != ItemUseTracker.DirtyUsing.NONE) {
             // Shit hack, I know I'm too lazy to properly check for when the item is actually usable eg: riptide trident in water.
             // Also, there are bugs in bedrock where the player can still use even tho they're not supposed to so what we get will never
             // be reliable (https://bugs.mojang.com/browse/MCPE/issues/MCPE-178647), call me out for being lazy but blame bugrock.

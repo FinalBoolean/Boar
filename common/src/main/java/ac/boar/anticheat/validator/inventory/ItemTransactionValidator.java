@@ -96,7 +96,6 @@ public final class ItemTransactionValidator {
             }
 
             case ITEM_RELEASE -> {
-                // Self-explanatory.
                 if (packet.getActionType() == 0) {
                     if (player.compensatedInventory.inventoryContainer.getHeldItem().is(Items.TRIDENT)) {
                         player.setDirtyRiptide(player.sinceTridentUse, player.compensatedInventory.inventoryContainer.getHeldItemData());
@@ -104,7 +103,9 @@ public final class ItemTransactionValidator {
 
                     player.getItemUseTracker().release();
                     player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
-//                    System.out.println("Release using item.");
+                } else if (packet.getActionType() == 1) {
+                    player.getItemUseTracker().release();
+                    player.getItemUseTracker().setDirtyUsing(ItemUseTracker.DirtyUsing.NONE);
                 }
             }
 
@@ -127,13 +128,16 @@ public final class ItemTransactionValidator {
 
                         final ItemData SD2 = inventory.inventoryContainer.getItemFromSlot(action.getSlot()).getData();
                         if (!validate(SD2, action.getFromItem())) {
+                            if (isEmpty(SD2)) {
+                                continue;
+                            }
                             return false;
                         }
                     }
                 }
 
                 final boolean emptyHandInteraction = isEmpty(SD1) && isEmpty(packet.getItemInHand());
-                if (noActions && !emptyHandInteraction && !validate(SD1, packet.getItemInHand())) {
+                if (noActions && !emptyHandInteraction && !isEmpty(SD1) && !validate(SD1, packet.getItemInHand())) {
                     return false;
                 }
 
@@ -357,6 +361,15 @@ public final class ItemTransactionValidator {
                     // This seems to for things that is not related to block interact and only for item interaction.
                     case 1 -> {
                         if (packet.getItemInHand() == null || !validate(SD1, packet.getItemInHand())) {
+                            // If for some reason we don't have an item here in Boar's inventory we'll inspect the client-authoritative item. Shouldn't cause
+                            // too many issues since it would result in a slow-down if anything with no benefits to a cheater.
+                            // TODO: Look into potential inventory bugs
+                            if (isEmpty(SD1) && !isEmpty(packet.getItemInHand())) {
+                                final BoarItemStack claimed = BoarItemStack.of(player.getSession(), packet.getItemInHand());
+                                if (claimed.item() != null) {
+                                    player.getItemUseTracker().use(packet.getItemInHand(), claimed.item(), false);
+                                }
+                            }
                             return true;
                         }
 
@@ -398,30 +411,38 @@ public final class ItemTransactionValidator {
         return true;
     }
 
-    public void handle(final ItemStackRequestPacket packet) {
+    public boolean handle(final ItemStackRequestPacket packet) {
         final CompensatedInventory inventory = player.compensatedInventory;
         if (inventory.openContainer == null) {
-            return;
+            return true;
         }
 
         player.doingInventoryAction = true;
 
         final List<ItemStackRequest> clone = new ArrayList<>(packet.getRequests());
-        packet.getRequests().clear();
+        final boolean mitigate = !player.disableMitigations();
+        if (mitigate) {
+            packet.getRequests().clear();
+        }
 
         final ItemRequestProcessor processor = new ItemRequestProcessor(player);
         for (final ItemStackRequest request : clone) {
             if (request.getActions().length == 0) {
-                packet.getRequests().add(request);
+                if (mitigate) {
+                    packet.getRequests().add(request);
+                }
                 continue;
             }
 
             if (!processor.processAll(request)) {
-                return;
+                return false;
             }
 
-            packet.getRequests().add(request);
+            if (mitigate) {
+                packet.getRequests().add(request);
+            }
         }
+        return true;
     }
 
     public static boolean validate(final ItemData predicted, final ItemData claimed) {

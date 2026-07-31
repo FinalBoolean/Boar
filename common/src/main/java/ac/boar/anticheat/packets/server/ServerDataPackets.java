@@ -8,9 +8,13 @@ import ac.boar.anticheat.ack.types.UpdateAbilitiesAck;
 import ac.boar.anticheat.ack.types.UpdateAttributesAck;
 import ac.boar.anticheat.compensated.cache.container.ContainerCache;
 import ac.boar.anticheat.compensated.cache.entity.EntityCache;
+import ac.boar.anticheat.data.ItemUseTracker;
+import ac.boar.anticheat.data.input.PredictionData;
 import ac.boar.anticheat.data.inventory.BoarItemStack;
 import ac.boar.anticheat.player.BoarPlayer;
+import ac.boar.anticheat.player.data.PlayerData;
 import ac.boar.anticheat.util.DimensionUtil;
+import ac.boar.anticheat.util.math.Vec3;
 import ac.boar.anticheat.validator.blockbreak.ServerBreakBlockValidator;
 import ac.boar.mappings.item.Items;
 import ac.boar.protocol.api.CloudburstPacketEvent;
@@ -40,14 +44,25 @@ public class ServerDataPackets implements PacketListener {
         if (event.getPacket() instanceof StartGamePacket start) {
             player.runtimeEntityId = start.getRuntimeEntityId();
 
+            final Vec3 wirePosition = new Vec3(start.getPlayerPosition());
+            final Vec3 playerPosition = wirePosition.down(player.getYOffset());
+            player.compensatedWorld.clearChunks();
             player.compensatedWorld.setDimension(DimensionUtil.dimensionFromId(start.getDimensionId()));
+            player.setPos(playerPosition, false);
+            player.prevPosition = playerPosition.clone();
+            player.unvalidatedPosition = playerPosition.clone();
+            player.prevUnvalidatedPosition = playerPosition.clone();
+            player.velocity = Vec3.ZERO.clone();
+            player.lastTickFinalVelocity = Vec3.ZERO.clone();
+            player.predictionResult = new PredictionData(Vec3.ZERO, Vec3.ZERO, Vec3.ZERO);
+            player.insideUnloadedChunk = true;
+            player.getTeleportUtil().reset(wirePosition);
             player.currentLoadingScreen = null;
             player.inLoadingScreen = true;
 
-            // We need this to do rewind teleport.
             start.setAuthoritativeMovementMode(AuthoritativeMovementMode.SERVER_WITH_REWIND);
             start.setRewindHistorySize(Boar.getConfig().rewindHistory());
-            player.serverBreakBlockValidator = new ServerBreakBlockValidator(player);
+            player.serverBreakBlockValidator = (ServerBreakBlockValidator) player.getCheckHolder().get(ServerBreakBlockValidator.class);
 
             player.sendLatencyStack(new GameTypeAck(start.getPlayerGameType()));
         }
@@ -66,7 +81,7 @@ public class ServerDataPackets implements PacketListener {
 
         if (event.getPacket() instanceof SetEntityDataPacket packet) {
             if (packet.getRuntimeEntityId() != player.runtimeEntityId) {
-                final EntityCache cache = player.compensatedWorld.getEntity(player.runtimeEntityId);
+                final EntityCache cache = player.compensatedWorld.getEntity(packet.getRuntimeEntityId());
                 if (cache == null) {
                     return;
                 }
@@ -101,6 +116,10 @@ public class ServerDataPackets implements PacketListener {
                 });
             } else {
                 flagsCopy = null;
+            }
+
+            if (width != null) {
+                width = Math.max(0f, width - 1e-4f);
             }
 
             // Dimension seems to be controlled server-side as far as I know (tested with clumsy).
@@ -139,20 +158,23 @@ public class ServerDataPackets implements PacketListener {
             player.getFlagTracker().set(EntityFlag.SPRINTING, packet.getFlags().contains(EntityFlag.SPRINTING));
 
             boolean using = packet.getFlags().contains(EntityFlag.USING_ITEM);
-            if (!using) {
-                // This is a shit solution to prevent player to do no slow using this packet but ehhhh
-                // We wouldn't have to do this if we're handling eating properly
-                player.getEntity().releaseItem();
-            }
+            final boolean staleStop = !using && player.getItemUseTracker().getDirtyUsing() == ItemUseTracker.DirtyUsing.INVENTORY_TRANSACTION;
+            if (!staleStop) {
+                if (!using) {
+                    // This is a shit solution to prevent player to do no slow using this packet but ehhhh
+                    // We wouldn't have to do this if we're handling eating properly
+                    player.getEntity().releaseItem();
+                }
 
-            player.getFlagTracker().set(EntityFlag.USING_ITEM, using);
+                player.getFlagTracker().set(EntityFlag.USING_ITEM, using);
+            }
 
             final ContainerCache cache = player.compensatedInventory.armorContainer;
             player.getFlagTracker().set(EntityFlag.GLIDING, BoarItemStack.of(player.getSession(), cache.get(1).getData()).is(Items.ELYTRA) && packet.getFlags().contains(EntityFlag.GLIDING));
         }
     }
 
-    private static AttributeData stripModifiers(AttributeData data) {
+    public static AttributeData stripModifiers(AttributeData data) {
         if (data.getName().equals("minecraft:movement") || data.getName().equals("minecraft:underwater_movement") || data.getName().equals("minecraft:lava_movement")) {
             if (data.getModifiers().isEmpty()) {
                 return data;
@@ -171,7 +193,7 @@ public class ServerDataPackets implements PacketListener {
                 }
             }
             for (final AttributeModifierData modifier : data.getModifiers()) {
-                if (modifier.getOperation() == AttributeOperation.MULTIPLY_TOTAL) {
+                if (modifier.getOperation() == AttributeOperation.MULTIPLY_TOTAL && !modifier.equals(PlayerData.SPRINTING_SPEED_BOOST)) {
                     newValue *= (1.0F + modifier.getAmount());
                 }
             }

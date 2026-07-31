@@ -19,7 +19,9 @@ public class BadPacketA extends BaseCheck implements PacketCheck {
         if (event.getPacket() instanceof PlayerAuthInputPacket packet) {
             if (!MathUtil.isValid(packet.getPosition()) || !MathUtil.isValid(packet.getRotation()) || !MathUtil.isValid(packet.getDelta())) {
                 fail("pos=" + packet.getPosition() + ", rot=" + packet.getRotation() + ", delta=" + packet.getDelta());
-                player.kick("Invalid auth input packet!");
+                if (!player.disableMitigations()) {
+                    player.kick("Invalid auth input packet!");
+                }
             }
         }
     }

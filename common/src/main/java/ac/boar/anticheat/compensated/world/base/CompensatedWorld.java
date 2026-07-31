@@ -16,6 +16,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -23,16 +24,23 @@ import org.cloudburstmc.math.GenericMath;
 import org.cloudburstmc.math.vector.Vector3i;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 @Setter
 @Getter
 public class CompensatedWorld {
+    private static final int INITIAL_CHUNK_CLEANUP_DELAY_TICKS = 300;
+
     private final BoarPlayer player;
     private final Long2ObjectMap<BoarChunk> chunks = new Long2ObjectOpenHashMap<>();
     private final LongSet exemptedChunks = new LongOpenHashSet();
+    @Getter(AccessLevel.NONE)
+    private final Long2ObjectMap<Map<PendingBlockUpdateKey, Integer>> pendingBlockUpdates = new Long2ObjectOpenHashMap<>();
 
     private Dimension dimension;
 
@@ -50,6 +58,11 @@ public class CompensatedWorld {
 
     public EntityCache getEntity(long id) {
         return this.entities.get(id);
+    }
+
+    public Optional<EntityCache> fetchEntity(long id) {
+        EntityCache entity = this.entities.get(id);
+        return entity == null ? Optional.empty() : Optional.of(entity);
     }
 
     public EntityCache addToCache(final BoarPlayer player, final long runtimeId, final long uniqueId) {
@@ -73,6 +86,7 @@ public class CompensatedWorld {
 
     private int viewDistance = 16;
     private long lastChunkClean = Long.MIN_VALUE;
+    private int chunkCleanupDelayTicks = INITIAL_CHUNK_CLEANUP_DELAY_TICKS;
 
     public void setViewDistance(int viewDistance) {
         // The client always uses the server chunk view distance plus 1 unconditionally regardless of the radius it requested. It's also why we can get away with
@@ -82,6 +96,11 @@ public class CompensatedWorld {
 
     public void cleanChunksAtPlayerPosition() {
         if (this.player == null) {
+            return;
+        }
+
+        if (this.chunkCleanupDelayTicks > 0) {
+            this.chunkCleanupDelayTicks--;
             return;
         }
 
@@ -144,8 +163,10 @@ public class CompensatedWorld {
 
     public void put(int x, int z, BoarChunkSection[] chunks) {
         long chunkPosition = MathUtil.chunkPositionToLong(x, z);
-        this.chunks.put(chunkPosition, new BoarChunk(chunks, new ArrayList<>()));
+        final BoarChunkSection[] sections = Arrays.copyOf(chunks, chunks.length);
+        this.chunks.put(chunkPosition, new BoarChunk(sections, new ArrayList<>()));
         this.updateChunkExemption(chunkPosition, x, z);
+        this.applyPendingBlockUpdates(chunkPosition, sections);
     }
 
     public void updateSection(int chunkX, int chunkZ, int sectionY, BoarChunkSection section) {
@@ -154,17 +175,19 @@ public class CompensatedWorld {
             return;
         }
 
+        final long chunkPosition = MathUtil.chunkPositionToLong(chunkX, chunkZ);
         BoarChunk chunk = this.getChunk(chunkX, chunkZ);
         if (chunk == null) {
             final BoarChunkSection[] sections = new BoarChunkSection[sectionCount];
             sections[sectionY] = section;
-            final long chunkPosition = MathUtil.chunkPositionToLong(chunkX, chunkZ);
-            this.chunks.put(chunkPosition, new BoarChunk(sections, new ArrayList<>()));
+            chunk = new BoarChunk(sections, new ArrayList<>());
+            this.chunks.put(chunkPosition, chunk);
             this.updateChunkExemption(chunkPosition, chunkX, chunkZ);
-            return;
+        } else {
+            chunk.sections()[sectionY] = section;
         }
 
-        chunk.sections()[sectionY] = section;
+        this.applyPendingBlockUpdates(chunkPosition, chunk.sections(), sectionY);
     }
 
     private void updateChunkExemption(long chunkPosition, int chunkX, int chunkZ) {
@@ -178,6 +201,7 @@ public class CompensatedWorld {
     public void clearChunks() {
         this.chunks.clear();
         this.exemptedChunks.clear();
+        this.pendingBlockUpdates.clear();
         this.lastChunkClean = Long.MIN_VALUE;
     }
 
@@ -198,28 +222,88 @@ public class CompensatedWorld {
     }
 
     public void updateBlock(int x, int y, int z, int layer, int block) {
+        if (this.dimension == null || y < this.getMinY() || y >= this.getHeightY()) {
+            return;
+        }
+
         final BoarChunkSection[] column = this.getChunkSections(x >> 4, z >> 4);
         if (column == null) {
+            this.queuePendingBlockUpdate(x, y, z, layer, block);
             return;
         }
 
-        if (y < getMinY() || ((y - getMinY()) >> 4) > column.length - 1) {
-            // Y likely goes above or below the height limit of this world
+        this.applyBlockUpdate(column, x, y, z, layer, block);
+    }
+
+    private void queuePendingBlockUpdate(int x, int y, int z, int layer, int block) {
+        final long chunkPosition = MathUtil.chunkPositionToLong(x >> 4, z >> 4);
+        Map<PendingBlockUpdateKey, Integer> updates = this.pendingBlockUpdates.get(chunkPosition);
+        if (updates == null) {
+            updates = new HashMap<>();
+            this.pendingBlockUpdates.put(chunkPosition, updates);
+        }
+        updates.put(new PendingBlockUpdateKey(x, y, z, layer), block);
+    }
+
+    private void applyPendingBlockUpdates(long chunkPosition, BoarChunkSection[] column) {
+        final Map<PendingBlockUpdateKey, Integer> updates = this.pendingBlockUpdates.remove(chunkPosition);
+        if (updates == null) {
             return;
         }
 
-        BoarChunkSection palette = column[(y - getMinY()) >> 4];
-        if (palette == null) {
-            if (block != 0) {
-                // A previously empty chunk, which is no longer empty as a block has been added to it
-                column[(y - getMinY()) >> 4] = palette = new BoarChunkSection(this.player.mappingInfo.airId());
+        for (Map.Entry<PendingBlockUpdateKey, Integer> entry : updates.entrySet()) {
+            final PendingBlockUpdateKey key = entry.getKey();
+            this.applyBlockUpdate(column, key.x(), key.y(), key.z(), key.layer(), entry.getValue());
+        }
+    }
+
+    private void applyPendingBlockUpdates(long chunkPosition, BoarChunkSection[] column, int sectionY) {
+        final Map<PendingBlockUpdateKey, Integer> updates = this.pendingBlockUpdates.get(chunkPosition);
+        if (updates == null) {
+            return;
+        }
+
+        final Iterator<Map.Entry<PendingBlockUpdateKey, Integer>> iterator = updates.entrySet().iterator();
+        while (iterator.hasNext()) {
+            final Map.Entry<PendingBlockUpdateKey, Integer> entry = iterator.next();
+            final PendingBlockUpdateKey key = entry.getKey();
+            if ((key.y() - this.getMinY()) >> 4 != sectionY) {
+                continue;
+            }
+
+            this.applyBlockUpdate(column, key.x(), key.y(), key.z(), key.layer(), entry.getValue());
+            iterator.remove();
+        }
+
+        if (updates.isEmpty()) {
+            this.pendingBlockUpdates.remove(chunkPosition);
+        }
+    }
+
+    private void applyBlockUpdate(BoarChunkSection[] column, int x, int y, int z, int layer, int block) {
+        final int index = (y - this.getMinY()) >> 4;
+        if (index < 0 || index >= column.length) {
+            return;
+        }
+
+        BoarChunkSection section = column[index];
+        if (section == null) {
+            if (!this.player.mappingInfo.airIds().contains(block)) {
+                section = new BoarChunkSection(this.player.mappingInfo.airId());
+                column[index] = section;
             } else {
-                // Nothing to update
                 return;
             }
+        } else if (section.isShared()) {
+            // COW so that we never modify a section shared with other players worlds
+            section = section.copy();
+            column[index] = section;
         }
 
-        palette.setFullBlock(x & 0xF, y & 0xF, z & 0xF, layer, block);
+        section.setFullBlock(x & 0xF, y & 0xF, z & 0xF, layer, block);
+    }
+
+    private record PendingBlockUpdateKey(int x, int y, int z, int layer) {
     }
 
     public BoarBlockState getBlockState(Mutable vector3i, int layer) {
